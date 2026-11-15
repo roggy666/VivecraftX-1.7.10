@@ -45,43 +45,54 @@ public final class VRCursor {
      * while the panel's framebuffer is bound -- that is, from the end of drawing a screen.
      */
     public static void draw() {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.currentScreen == null || !VRState.running() || VR.settings() == null) {
-            return;
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
+        try {
+            Minecraft mc = Minecraft.getMinecraft();
+            if (mc.currentScreen == null || !VRState.running() || VR.settings() == null) {
+                return;
+            }
+            // Only once the ray has actually landed on the panel. Until then there is nothing
+            // meaningful to point at, and a pointer parked in a corner reads as a stuck cursor.
+            if (!MCOpenVR.controllerMouseValid) {
+                return;
+            }
+
+            int x = Mouse.getX() * mc.currentScreen.width / Math.max(1, mc.displayWidth);
+            int y = mc.currentScreen.height
+                    - Mouse.getY() * mc.currentScreen.height / Math.max(1, mc.displayHeight) - 1;
+
+            GL11.glEnable(GL11.GL_BLEND);
+            // Inverting blend, the same one vanilla uses for the in-world crosshair: the pointer has
+            // to stay legible over both a bright inventory and a dark one, which a fixed colour
+            // cannot do.
+            OpenGlHelper.glBlendFunc(GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ONE_MINUS_SRC_COLOR, 1, 0);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_ALPHA_TEST);
+            // The panel is composited by alpha test, so anything that writes alpha here would punch a
+            // hole in it. The pointer may change the colour it sits on but not that pixel's alpha.
+            GL11.glColorMask(true, true, true, false);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+
+            mc.getTextureManager().bindTexture(ICONS);
+            float size = 16.0F * VR.settings().menuCrosshairScale;
+            drawCentred(x, y, size, size);
+
+            GL11.glColorMask(true, true, true, true);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_ALPHA_TEST);
+        } finally {
+            GL11.glPopAttrib();
         }
-        // Only once the ray has actually landed on the panel. Until then there is nothing
-        // meaningful to point at, and a pointer parked in a corner reads as a stuck cursor.
-        if (!MCOpenVR.controllerMouseValid) {
-            return;
-        }
-
-        int x = Mouse.getX() * mc.currentScreen.width / Math.max(1, mc.displayWidth);
-        int y = mc.currentScreen.height
-                - Mouse.getY() * mc.currentScreen.height / Math.max(1, mc.displayHeight) - 1;
-
-        GL11.glEnable(GL11.GL_BLEND);
-        // Inverting blend, the same one vanilla uses for the in-world crosshair: the pointer has
-        // to stay legible over both a bright inventory and a dark one, which a fixed colour
-        // cannot do.
-        OpenGlHelper.glBlendFunc(GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ONE_MINUS_SRC_COLOR, 1, 0);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_ALPHA_TEST);
-        // The panel is composited by alpha test, so anything that writes alpha here would punch a
-        // hole in it. The pointer may change the colour it sits on but not that pixel's alpha.
-        GL11.glColorMask(true, true, true, false);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-
-        mc.getTextureManager().bindTexture(ICONS);
-        float size = 16.0F * VR.settings().menuCrosshairScale;
-        drawCentred(x, y, size, size);
-
-        GL11.glColorMask(true, true, true, true);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glEnable(GL11.GL_ALPHA_TEST);
     }
 
     /** Vanilla's textured rect, but placed by its centre, since a pointer aims from its middle. */

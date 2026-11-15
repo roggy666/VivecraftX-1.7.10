@@ -311,32 +311,43 @@ public final class VRHands {
      * versions settled on and the size the figures in the pose above were chosen against.
      */
     private static void drawMap(Minecraft mc, ItemStack held) {
-        GL11.glScalef(0.38F, 0.38F, 0.38F);
-        GL11.glRotatef(180.0F, 0.0F, 0.0F, 1.0F);
-        GL11.glScalef(1F / 128F, 1F / 128F, 1F / 128F);
-        GL11.glTranslatef(-64.0F, -64.0F, 0.0F);
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
+        try {
+            GL11.glScalef(0.38F, 0.38F, 0.38F);
+            GL11.glRotatef(180.0F, 0.0F, 0.0F, 1.0F);
+            GL11.glScalef(1F / 128F, 1F / 128F, 1F / 128F);
+            GL11.glTranslatef(-64.0F, -64.0F, 0.0F);
 
-        GL11.glDisable(GL11.GL_LIGHTING);
-        mc.getTextureManager().bindTexture(MAP_BACKGROUND);
-        Tessellator tessellator = Tessellator.instance;
-        GL11.glNormal3f(0.0F, 0.0F, -1.0F);
-        tessellator.startDrawingQuads();
-        tessellator.addVertexWithUV(-7.0D, 135.0D, 0.0D, 0.0D, 1.0D);
-        tessellator.addVertexWithUV(135.0D, 135.0D, 0.0D, 1.0D, 1.0D);
-        tessellator.addVertexWithUV(135.0D, -7.0D, 0.0D, 1.0D, 0.0D);
-        tessellator.addVertexWithUV(-7.0D, -7.0D, 0.0D, 0.0D, 0.0D);
-        tessellator.draw();
+            GL11.glDisable(GL11.GL_LIGHTING);
+            mc.getTextureManager().bindTexture(MAP_BACKGROUND);
+            Tessellator tessellator = Tessellator.instance;
+            GL11.glNormal3f(0.0F, 0.0F, -1.0F);
+            tessellator.startDrawingQuads();
+            tessellator.addVertexWithUV(-7.0D, 135.0D, 0.0D, 0.0D, 1.0D);
+            tessellator.addVertexWithUV(135.0D, 135.0D, 0.0D, 1.0D, 1.0D);
+            tessellator.addVertexWithUV(135.0D, -7.0D, 0.0D, 1.0D, 0.0D);
+            tessellator.addVertexWithUV(-7.0D, -7.0D, 0.0D, 0.0D, 0.0D);
+            tessellator.draw();
 
-        MapData data = ((ItemMap) held.getItem()).getMapData(held, mc.theWorld);
-        IItemRenderer custom = MinecraftForgeClient.getItemRenderer(held,
-                ItemRenderType.FIRST_PERSON_MAP);
-        if (custom != null) {
-            custom.renderItem(ItemRenderType.FIRST_PERSON_MAP, held, mc.thePlayer,
-                    mc.getTextureManager(), data);
-        } else if (data != null) {
-            mc.entityRenderer.getMapItemRenderer().func_148250_a(data, false);
+            MapData data = ((ItemMap) held.getItem()).getMapData(held, mc.theWorld);
+            IItemRenderer custom = MinecraftForgeClient.getItemRenderer(held,
+                    ItemRenderType.FIRST_PERSON_MAP);
+            if (custom != null) {
+                custom.renderItem(ItemRenderType.FIRST_PERSON_MAP, held, mc.thePlayer,
+                        mc.getTextureManager(), data);
+            } else if (data != null) {
+                mc.entityRenderer.getMapItemRenderer().func_148250_a(data, false);
+            }
+            GL11.glEnable(GL11.GL_LIGHTING);
+        } finally {
+            GL11.glPopAttrib();
         }
-        GL11.glEnable(GL11.GL_LIGHTING);
     }
 
     /**

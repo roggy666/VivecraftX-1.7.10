@@ -90,70 +90,81 @@ public final class VRComfortVignette {
      * corner however the headset's lenses are shaped, and costs no camera arithmetic.
      */
     private static void draw(float minimum, float strength) {
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPushMatrix();
-        GL11.glLoadIdentity();
-        GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glPushMatrix();
-        GL11.glLoadIdentity();
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
         try {
-            GL11.glDisable(GL11.GL_TEXTURE_2D);
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
-            GL11.glDisable(GL11.GL_LIGHTING);
-            GL11.glDepthMask(false);
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-
-            // Where the clear circle ends and the darkening begins. Clip space runs from minus
-            // one to one, and the corners are further out than that, so a radius of one still
-            // leaves the corners covered -- which is the point.
-            float clear = 1.6F - (1.6F - minimum) * strength;
-            float edge = clear + 0.45F;
-
-            Tessellator tes = Tessellator.instance;
-            tes.startDrawingQuads();
-            final int sides = 48;
-            for (int i = 0; i < sides; i++) {
-                double a0 = Math.PI * 2 * i / sides;
-                double a1 = Math.PI * 2 * (i + 1) / sides;
-                double c0 = Math.cos(a0);
-                double s0 = Math.sin(a0);
-                double c1 = Math.cos(a1);
-                double s1 = Math.sin(a1);
-                tes.setColorRGBA_F(0F, 0F, 0F, 0F);
-                tes.addVertex(c0 * clear, s0 * clear, 0);
-                tes.addVertex(c1 * clear, s1 * clear, 0);
-                tes.setColorRGBA_F(0F, 0F, 0F, 1F);
-                tes.addVertex(c1 * edge, s1 * edge, 0);
-                tes.addVertex(c0 * edge, s0 * edge, 0);
-            }
-            tes.draw();
-
-            // Beyond the ring, solid: the corners of the eye are further from the middle than
-            // any circle drawn above reaches.
-            tes.startDrawingQuads();
-            tes.setColorRGBA_F(0F, 0F, 0F, 1F);
-            for (int i = 0; i < sides; i++) {
-                double a0 = Math.PI * 2 * i / sides;
-                double a1 = Math.PI * 2 * (i + 1) / sides;
-                tes.addVertex(Math.cos(a0) * edge, Math.sin(a0) * edge, 0);
-                tes.addVertex(Math.cos(a1) * edge, Math.sin(a1) * edge, 0);
-                tes.addVertex(Math.cos(a1) * 8, Math.sin(a1) * 8, 0);
-                tes.addVertex(Math.cos(a0) * 8, Math.sin(a0) * 8, 0);
-            }
-            tes.draw();
-
-            GL11.glDepthMask(true);
-            GL11.glDisable(GL11.GL_BLEND);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
-            GL11.glColor4f(1F, 1F, 1F, 1F);
-        } finally {
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glPopMatrix();
             GL11.glMatrixMode(GL11.GL_PROJECTION);
-            GL11.glPopMatrix();
+            GL11.glPushMatrix();
+            GL11.glLoadIdentity();
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPushMatrix();
+            GL11.glLoadIdentity();
+            try {
+                GL11.glDisable(GL11.GL_TEXTURE_2D);
+                GL11.glDisable(GL11.GL_DEPTH_TEST);
+                GL11.glDisable(GL11.GL_LIGHTING);
+                GL11.glDepthMask(false);
+                GL11.glEnable(GL11.GL_BLEND);
+                GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+                // Where the clear circle ends and the darkening begins. Clip space runs from minus
+                // one to one, and the corners are further out than that, so a radius of one still
+                // leaves the corners covered -- which is the point.
+                float clear = 1.6F - (1.6F - minimum) * strength;
+                float edge = clear + 0.45F;
+
+                Tessellator tes = Tessellator.instance;
+                tes.startDrawingQuads();
+                final int sides = 48;
+                for (int i = 0; i < sides; i++) {
+                    double a0 = Math.PI * 2 * i / sides;
+                    double a1 = Math.PI * 2 * (i + 1) / sides;
+                    double c0 = Math.cos(a0);
+                    double s0 = Math.sin(a0);
+                    double c1 = Math.cos(a1);
+                    double s1 = Math.sin(a1);
+                    tes.setColorRGBA_F(0F, 0F, 0F, 0F);
+                    tes.addVertex(c0 * clear, s0 * clear, 0);
+                    tes.addVertex(c1 * clear, s1 * clear, 0);
+                    tes.setColorRGBA_F(0F, 0F, 0F, 1F);
+                    tes.addVertex(c1 * edge, s1 * edge, 0);
+                    tes.addVertex(c0 * edge, s0 * edge, 0);
+                }
+                tes.draw();
+
+                // Beyond the ring, solid: the corners of the eye are further from the middle than
+                // any circle drawn above reaches.
+                tes.startDrawingQuads();
+                tes.setColorRGBA_F(0F, 0F, 0F, 1F);
+                for (int i = 0; i < sides; i++) {
+                    double a0 = Math.PI * 2 * i / sides;
+                    double a1 = Math.PI * 2 * (i + 1) / sides;
+                    tes.addVertex(Math.cos(a0) * edge, Math.sin(a0) * edge, 0);
+                    tes.addVertex(Math.cos(a1) * edge, Math.sin(a1) * edge, 0);
+                    tes.addVertex(Math.cos(a1) * 8, Math.sin(a1) * 8, 0);
+                    tes.addVertex(Math.cos(a0) * 8, Math.sin(a0) * 8, 0);
+                }
+                tes.draw();
+
+                GL11.glDepthMask(true);
+                GL11.glDisable(GL11.GL_BLEND);
+                GL11.glEnable(GL11.GL_DEPTH_TEST);
+                GL11.glEnable(GL11.GL_TEXTURE_2D);
+                GL11.glColor4f(1F, 1F, 1F, 1F);
+            } finally {
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                GL11.glPopMatrix();
+                GL11.glMatrixMode(GL11.GL_PROJECTION);
+                GL11.glPopMatrix();
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            }
+        } finally {
+            GL11.glPopAttrib();
         }
     }
 }

@@ -638,59 +638,70 @@ public final class VRGui {
      * to keep anti-aliased text edges.
      */
     private static void drawPanel(Minecraft mc, boolean inMenuRoom) {
-        buffer.bindFramebufferTexture();
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
+        try {
+            buffer.bindFramebufferTexture();
 
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        RenderHelper.disableStandardItemLighting();
-        GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            RenderHelper.disableStandardItemLighting();
+            GL11.glDisable(GL11.GL_LIGHTING);
 
-        // Clamped, or the filter reaches past the edge of the texture and draws a dark border
-        // round the whole panel.
-        GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
-        GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
-        buffer.applyPanelFilter();
+            // Clamped, or the filter reaches past the edge of the texture and draws a dark border
+            // round the whole panel.
+            GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+            GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+            buffer.applyPanelFilter();
 
-        // A menu is there to be read, so it is drawn solid; the in-game panel honours the
-        // opacity setting. Either way the cutout is the alpha test below, which throws away the
-        // pixels the interface never touched and so lets the world through round the edges.
-        GL11.glColor4f(1, 1, 1, inMenuRoom ? 1F : VR.settings().hudOpacity);
-        GL11.glEnable(GL11.GL_ALPHA_TEST);
+            // A menu is there to be read, so it is drawn solid; the in-game panel honours the
+            // opacity setting. Either way the cutout is the alpha test below, which throws away the
+            // pixels the interface never touched and so lets the world through round the edges.
+            GL11.glColor4f(1, 1, 1, inMenuRoom ? 1F : VR.settings().hudOpacity);
+            GL11.glEnable(GL11.GL_ALPHA_TEST);
 
-        // The menu always wins over the world: being unable to reach the menu because a block is
-        // in the way is not a trade worth making.
-        if (!VR.settings().hudOcclusion || inMenuRoom) {
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
-        } else {
+            // The menu always wins over the world: being unable to reach the menu because a block is
+            // in the way is not a trade worth making.
+            if (!VR.settings().hudOcclusion || inMenuRoom) {
+                GL11.glDisable(GL11.GL_DEPTH_TEST);
+            } else {
+                GL11.glEnable(GL11.GL_DEPTH_TEST);
+            }
+            GL11.glDepthMask(true);
+            // Blending as well as the alpha test: the test decides what is drawn at all, blending
+            // decides how solidly. Without it the opacity setting could only ever mean "all or
+            // nothing", which is what it used to mean.
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            // Low enough to keep the softened edges of text, high enough to drop what was cleared.
+            GL11.glAlphaFunc(GL11.GL_GREATER, 0.01F);
+
+            // The panel's own scale, times the world scale, so a shrunken or enlarged world keeps the
+            // interface the same size relative to the hand it is attached to. The controller ray is
+            // told the panel's own scale alone, which is the figure its coordinate mapping inverts.
+            float scale = MCOpenVR.guiScale * (VR.player() != null ? VR.player().worldScale : 1F);
+            GL11.glScalef(scale, scale, scale);
+
+            ScaledResolution resolution = new ScaledResolution(mc, bufferWidth, bufferHeight);
+            drawQuad(resolution.getScaledWidth(), resolution.getScaledHeight());
+
+            // Put back everything this method changed. The next thing to draw is the other eye's
+            // world, so anything left behind here would show up in one eye and not the other.
+            GL11.glDisable(GL11.GL_BLEND);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_CULL_FACE);
+            GL11.glEnable(GL11.GL_ALPHA_TEST);
+            GL11.glAlphaFunc(GL11.GL_GREATER, 0.1F);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+            buffer.unbindFramebufferTexture();
+        } finally {
+            GL11.glPopAttrib();
         }
-        GL11.glDepthMask(true);
-        // Blending as well as the alpha test: the test decides what is drawn at all, blending
-        // decides how solidly. Without it the opacity setting could only ever mean "all or
-        // nothing", which is what it used to mean.
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        // Low enough to keep the softened edges of text, high enough to drop what was cleared.
-        GL11.glAlphaFunc(GL11.GL_GREATER, 0.01F);
-
-        // The panel's own scale, times the world scale, so a shrunken or enlarged world keeps the
-        // interface the same size relative to the hand it is attached to. The controller ray is
-        // told the panel's own scale alone, which is the figure its coordinate mapping inverts.
-        float scale = MCOpenVR.guiScale * (VR.player() != null ? VR.player().worldScale : 1F);
-        GL11.glScalef(scale, scale, scale);
-
-        ScaledResolution resolution = new ScaledResolution(mc, bufferWidth, bufferHeight);
-        drawQuad(resolution.getScaledWidth(), resolution.getScaledHeight());
-
-        // Put back everything this method changed. The next thing to draw is the other eye's
-        // world, so anything left behind here would show up in one eye and not the other.
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glEnable(GL11.GL_ALPHA_TEST);
-        GL11.glAlphaFunc(GL11.GL_GREATER, 0.1F);
-        GL11.glColor4f(1F, 1F, 1F, 1F);
-        buffer.unbindFramebufferTexture();
     }
 
     /**

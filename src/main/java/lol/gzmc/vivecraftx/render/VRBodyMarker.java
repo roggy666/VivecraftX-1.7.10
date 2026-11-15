@@ -80,37 +80,48 @@ public final class VRBodyMarker {
     }
 
     private static void draw(EntityPlayerSP player, Vec3 origin, float strength) {
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDepthMask(false);
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
+        try {
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glDepthMask(false);
 
-        // Just above the feet, so it lies on whatever the player is standing on rather than
-        // inside it.
-        double x = player.posX - origin.xCoord;
-        double y = player.boundingBox.minY - origin.yCoord + 0.015D;
-        double z = player.posZ - origin.zCoord;
+            // Just above the feet, so it lies on whatever the player is standing on rather than
+            // inside it.
+            double x = player.posX - origin.xCoord;
+            double y = player.boundingBox.minY - origin.yCoord + 0.015D;
+            double z = player.posZ - origin.zCoord;
 
-        Tessellator tes = Tessellator.instance;
-        tes.startDrawingQuads();
-        tes.setColorRGBA_F(0.35F, 0.6F, 1.0F, 0.55F * strength);
-        final int sides = 40;
-        final double outer = 0.32D;
-        final double inner = 0.27D;
-        for (int i = 0; i < sides; i++) {
-            double a0 = Math.PI * 2 * i / sides;
-            double a1 = Math.PI * 2 * (i + 1) / sides;
-            tes.addVertex(x + Math.cos(a0) * inner, y, z + Math.sin(a0) * inner);
-            tes.addVertex(x + Math.cos(a1) * inner, y, z + Math.sin(a1) * inner);
-            tes.addVertex(x + Math.cos(a1) * outer, y, z + Math.sin(a1) * outer);
-            tes.addVertex(x + Math.cos(a0) * outer, y, z + Math.sin(a0) * outer);
+            Tessellator tes = Tessellator.instance;
+            tes.startDrawingQuads();
+            tes.setColorRGBA_F(0.35F, 0.6F, 1.0F, 0.55F * strength);
+            final int sides = 40;
+            final double outer = 0.32D;
+            final double inner = 0.27D;
+            for (int i = 0; i < sides; i++) {
+                double a0 = Math.PI * 2 * i / sides;
+                double a1 = Math.PI * 2 * (i + 1) / sides;
+                tes.addVertex(x + Math.cos(a0) * inner, y, z + Math.sin(a0) * inner);
+                tes.addVertex(x + Math.cos(a1) * inner, y, z + Math.sin(a1) * inner);
+                tes.addVertex(x + Math.cos(a1) * outer, y, z + Math.sin(a1) * outer);
+                tes.addVertex(x + Math.cos(a0) * outer, y, z + Math.sin(a0) * outer);
+            }
+            tes.draw();
+
+            GL11.glDepthMask(true);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+        } finally {
+            GL11.glPopAttrib();
         }
-        tes.draw();
-
-        GL11.glDepthMask(true);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 }

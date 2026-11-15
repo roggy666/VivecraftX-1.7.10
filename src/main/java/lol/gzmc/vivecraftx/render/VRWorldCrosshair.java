@@ -150,53 +150,64 @@ public final class VRWorldCrosshair {
     /** The crosshair itself, with both matrices already saved by the caller. */
     private static void draw(Minecraft mc, VRSettings settings, Vec3 cross, Vec3 origin,
             double dx, double dy, double dz, float scale) {
-        if (!VRCamera.reapplyEyeCamera()) {
-            return;
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
+        try {
+            if (!VRCamera.reapplyEyeCamera()) {
+                return;
+            }
+
+            GL11.glTranslated(cross.xCoord + dx * SLIGHTLY_CLOSER - origin.xCoord,
+                    cross.yCoord + dy * SLIGHTLY_CLOSER - origin.yCoord,
+                    cross.zCoord + dz * SLIGHTLY_CLOSER - origin.zCoord);
+            GL11.glRotatef(-VR.player().getControllerMainYaw_World(), 0.0F, 1.0F, 0.0F);
+            GL11.glRotatef(-VR.roomScale().getControllerMainPitch_World(), 1.0F, 0.0F, 0.0F);
+            GL11.glScalef(scale, scale, scale);
+
+            GL11.glDisable(GL11.GL_LIGHTING);
+            if (!settings.useCrosshairOcclusion) {
+                GL11.glDisable(GL11.GL_DEPTH_TEST);
+            }
+            GL11.glEnable(GL11.GL_BLEND);
+            // Inverting blend, so the crosshair reads against a bright sky and a dark cave alike.
+            GL14.glBlendFuncSeparate(GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ONE_MINUS_SRC_COLOR,
+                    GL11.GL_ONE, GL11.GL_ONE);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+
+            // Turned forty-five degrees when nothing was hit, which is how you can tell at a glance
+            // that you are aiming at open air rather than at something too far away.
+            if (mc.objectMouseOver == null) {
+                GL11.glRotatef(45, 0, 0, 1);
+            }
+
+            // Nearest filtering, so a crosshair blown up to a quarter of a metre across stays the
+            // crisp cross it is drawn as rather than a blur. The wrapping mode is deliberately left
+            // alone: this sheet also carries the hotbar, the hearts and the armour bar, the setting
+            // lives on the texture rather than on this draw, and it would stay changed for the rest
+            // of the session.
+            mc.getTextureManager().bindTexture(Gui.icons);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+
+            Tessellator t = Tessellator.instance;
+            t.startDrawingQuads();
+            t.addVertexWithUV(-1, 1, 0, 0, SIZE * TEXEL);
+            t.addVertexWithUV(1, 1, 0, SIZE * TEXEL, SIZE * TEXEL);
+            t.addVertexWithUV(1, -1, 0, SIZE * TEXEL, 0);
+            t.addVertexWithUV(-1, -1, 0, 0, 0);
+            t.draw();
+
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glColor4f(1, 1, 1, 1);
+        } finally {
+            GL11.glPopAttrib();
         }
-
-        GL11.glTranslated(cross.xCoord + dx * SLIGHTLY_CLOSER - origin.xCoord,
-                cross.yCoord + dy * SLIGHTLY_CLOSER - origin.yCoord,
-                cross.zCoord + dz * SLIGHTLY_CLOSER - origin.zCoord);
-        GL11.glRotatef(-VR.player().getControllerMainYaw_World(), 0.0F, 1.0F, 0.0F);
-        GL11.glRotatef(-VR.roomScale().getControllerMainPitch_World(), 1.0F, 0.0F, 0.0F);
-        GL11.glScalef(scale, scale, scale);
-
-        GL11.glDisable(GL11.GL_LIGHTING);
-        if (!settings.useCrosshairOcclusion) {
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
-        }
-        GL11.glEnable(GL11.GL_BLEND);
-        // Inverting blend, so the crosshair reads against a bright sky and a dark cave alike.
-        GL14.glBlendFuncSeparate(GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ONE_MINUS_SRC_COLOR,
-                GL11.GL_ONE, GL11.GL_ONE);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-
-        // Turned forty-five degrees when nothing was hit, which is how you can tell at a glance
-        // that you are aiming at open air rather than at something too far away.
-        if (mc.objectMouseOver == null) {
-            GL11.glRotatef(45, 0, 0, 1);
-        }
-
-        // Nearest filtering, so a crosshair blown up to a quarter of a metre across stays the
-        // crisp cross it is drawn as rather than a blur. The wrapping mode is deliberately left
-        // alone: this sheet also carries the hotbar, the hearts and the armour bar, the setting
-        // lives on the texture rather than on this draw, and it would stay changed for the rest
-        // of the session.
-        mc.getTextureManager().bindTexture(Gui.icons);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-
-        Tessellator t = Tessellator.instance;
-        t.startDrawingQuads();
-        t.addVertexWithUV(-1, 1, 0, 0, SIZE * TEXEL);
-        t.addVertexWithUV(1, 1, 0, SIZE * TEXEL, SIZE * TEXEL);
-        t.addVertexWithUV(1, -1, 0, SIZE * TEXEL, 0);
-        t.addVertexWithUV(-1, -1, 0, 0, 0);
-        t.draw();
-
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glColor4f(1, 1, 1, 1);
     }
 }

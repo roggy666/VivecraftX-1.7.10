@@ -86,67 +86,78 @@ public final class VRTeleportArc {
 
     private static void draw(Minecraft mc, OpenVRPlayer player, VRMovementStyle style,
             boolean valid, Vec3 destination) {
-        Vec3 origin = VRRenderState.interpolatedPlayerPos;
-        Vec3 eye = VRRenderState.getEyeRenderPos(VR.currentPass());
-        if (origin == null || eye == null) {
-            return;
-        }
-
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glDepthMask(false);
-
-        float[] colour = valid ? GOOD : BAD;
-        float alpha = valid ? 0.86F : 0.5F;
-
-        // Only moves while the landing is good, so a beam that has stopped being useful also
-        // stops drawing the eye.
-        long now = System.currentTimeMillis();
-        if (valid) {
-            if (scrollAt != 0) {
-                scroll += (now - scrollAt) / 1000.0D * style.textureScrollSpeed * 0.6D;
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
+        try {
+            Vec3 origin = VRRenderState.interpolatedPlayerPos;
+            Vec3 eye = VRRenderState.getEyeRenderPos(VR.currentPass());
+            if (origin == null || eye == null) {
+                return;
             }
-        }
-        scrollAt = now;
 
-        mc.getTextureManager().bindTexture(style.texture);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDepthMask(false);
 
-        int segments = SEGMENTS;
-        if (style.beamGrow) {
-            segments = (int) (segments * player.movementTeleportProgress);
-        }
-        if (segments < 2) {
-            segments = 2;
-        }
-        float halfWidth = style.beamHalfWidth * 0.15F;
+            float[] colour = valid ? GOOD : BAD;
+            float alpha = valid ? 0.86F : 0.5F;
 
-        Tessellator tes = Tessellator.instance;
-        tes.startDrawingQuads();
-        tes.setColorRGBA_F(colour[0], colour[1], colour[2], alpha);
-
-        for (int i = 0; i < segments; i++) {
-            float from = (float) i / segments;
-            float to = (float) (i + 1) / segments;
-            Vec3 a = player.getInterpolatedArcPosition(from);
-            Vec3 b = player.getInterpolatedArcPosition(to);
-            if (a == null || b == null) {
-                continue;
+            // Only moves while the landing is good, so a beam that has stopped being useful also
+            // stops drawing the eye.
+            long now = System.currentTimeMillis();
+            if (valid) {
+                if (scrollAt != 0) {
+                    scroll += (now - scrollAt) / 1000.0D * style.textureScrollSpeed * 0.6D;
+                }
             }
-            ribbon(tes, a, b, origin, eye, halfWidth,
-                    (float) (from * 4 - scroll), (float) (to * 4 - scroll));
-        }
-        tes.draw();
+            scrollAt = now;
 
-        if (valid) {
-            rings(tes, destination, origin, colour);
-        }
+            mc.getTextureManager().bindTexture(style.texture);
 
-        GL11.glDepthMask(true);
-        GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glColor4f(1F, 1F, 1F, 1F);
+            int segments = SEGMENTS;
+            if (style.beamGrow) {
+                segments = (int) (segments * player.movementTeleportProgress);
+            }
+            if (segments < 2) {
+                segments = 2;
+            }
+            float halfWidth = style.beamHalfWidth * 0.15F;
+
+            Tessellator tes = Tessellator.instance;
+            tes.startDrawingQuads();
+            tes.setColorRGBA_F(colour[0], colour[1], colour[2], alpha);
+
+            for (int i = 0; i < segments; i++) {
+                float from = (float) i / segments;
+                float to = (float) (i + 1) / segments;
+                Vec3 a = player.getInterpolatedArcPosition(from);
+                Vec3 b = player.getInterpolatedArcPosition(to);
+                if (a == null || b == null) {
+                    continue;
+                }
+                ribbon(tes, a, b, origin, eye, halfWidth,
+                        (float) (from * 4 - scroll), (float) (to * 4 - scroll));
+            }
+            tes.draw();
+
+            if (valid) {
+                rings(tes, destination, origin, colour);
+            }
+
+            GL11.glDepthMask(true);
+            GL11.glEnable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+        } finally {
+            GL11.glPopAttrib();
+        }
     }
 
     /**

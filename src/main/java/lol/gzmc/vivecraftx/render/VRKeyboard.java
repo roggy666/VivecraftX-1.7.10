@@ -358,48 +358,59 @@ public final class VRKeyboard {
     }
 
     private static void draw() {
-        Minecraft mc = Minecraft.getMinecraft();
-        Vec3 origin = VRRenderState.interpolatedPlayerPos;
-        if (origin == null) {
-            return;
-        }
-        GL11.glTranslated(centre.xCoord - origin.xCoord, centre.yCoord - origin.yCoord,
-                centre.zCoord - origin.zCoord);
-        GL11.glMultMatrix(frame());
-
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-
-        int index = 0;
-        for (int row = 0; row < ROWS.length; row++) {
-            String keys = ROWS[row];
-            float rowWidth = keys.length() * (KEY + GAP) - GAP;
-            float top = (ROWS.length / 2F - row) * (KEY + GAP);
-            for (int column = 0; column < keys.length(); column++) {
-                float left = -rowWidth / 2F + column * (KEY + GAP);
-                boolean lit = inside[0] == index || inside[1] == index;
-                cap(mc, left, top, KEY, lit,
-                        String.valueOf(shift ? Character.toUpperCase(keys.charAt(column))
-                                             : keys.charAt(column)));
-                index++;
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
+        try {
+            Minecraft mc = Minecraft.getMinecraft();
+            Vec3 origin = VRRenderState.interpolatedPlayerPos;
+            if (origin == null) {
+                return;
             }
-        }
-        float width = 4 * (KEY + GAP) * 1.5F;
-        float top = (ROWS.length / 2F - ROWS.length) * (KEY + GAP);
-        String[] wide = { shift ? "SHIFT*" : "shift", "space", "back", "enter" };
-        for (int i = 0; i < 4; i++) {
-            float left = -width / 2F + i * (KEY + GAP) * 1.5F;
-            boolean lit = inside[0] == index + i || inside[1] == index + i;
-            cap(mc, left, top, KEY * 1.5F, lit, wide[i]);
-        }
+            GL11.glTranslated(centre.xCoord - origin.xCoord, centre.yCoord - origin.yCoord,
+                    centre.zCoord - origin.zCoord);
+            GL11.glMultMatrix(frame());
 
-        GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glColor4f(1F, 1F, 1F, 1F);
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+            int index = 0;
+            for (int row = 0; row < ROWS.length; row++) {
+                String keys = ROWS[row];
+                float rowWidth = keys.length() * (KEY + GAP) - GAP;
+                float top = (ROWS.length / 2F - row) * (KEY + GAP);
+                for (int column = 0; column < keys.length(); column++) {
+                    float left = -rowWidth / 2F + column * (KEY + GAP);
+                    boolean lit = inside[0] == index || inside[1] == index;
+                    cap(mc, left, top, KEY, lit,
+                            String.valueOf(shift ? Character.toUpperCase(keys.charAt(column))
+                                                 : keys.charAt(column)));
+                    index++;
+                }
+            }
+            float width = 4 * (KEY + GAP) * 1.5F;
+            float top = (ROWS.length / 2F - ROWS.length) * (KEY + GAP);
+            String[] wide = { shift ? "SHIFT*" : "shift", "space", "back", "enter" };
+            for (int i = 0; i < 4; i++) {
+                float left = -width / 2F + i * (KEY + GAP) * 1.5F;
+                boolean lit = inside[0] == index + i || inside[1] == index + i;
+                cap(mc, left, top, KEY * 1.5F, lit, wide[i]);
+            }
+
+            GL11.glEnable(GL11.GL_CULL_FACE);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+        } finally {
+            GL11.glPopAttrib();
+        }
     }
 
     private static void cap(Minecraft mc, float left, float top, float width, boolean lit,

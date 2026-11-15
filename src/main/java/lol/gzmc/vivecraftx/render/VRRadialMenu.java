@@ -308,38 +308,49 @@ public final class VRRadialMenu {
     }
 
     private static void draw() {
-        Minecraft mc = Minecraft.getMinecraft();
-        Vec3 origin = VRRenderState.interpolatedPlayerPos;
-        if (origin == null) {
-            return;
-        }
-
-        GL11.glTranslated(centre.xCoord - origin.xCoord, centre.yCoord - origin.yCoord,
-                centre.zCoord - origin.zCoord);
-        GL11.glMultMatrix(frame());
-        // Into interface pixels, with the vertical axis running down as it does everywhere else
-        // in the interface, so that the layout and the font agree without either being a
-        // special case.
-        GL11.glScalef(SCALE, -SCALE, SCALE);
-
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-
-        for (int slot = 0; slot < SLOTS; slot++) {
-            String label = labelFor(slot);
-            if (label == null) {
-                continue;
+        // Everything this turns off, it turns off for the rest of the eye unless it is put
+        // back. Lighting is the one that shows: a later item drawn correctly comes out
+        // unshaded, and reads as flat. Handing the whole block of state to the driver to
+        // remember is both shorter than undoing each piece and proof against an exception
+        // part way through, which is how it escaped in the first place.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
+        try {
+            Minecraft mc = Minecraft.getMinecraft();
+            Vec3 origin = VRRenderState.interpolatedPlayerPos;
+            if (origin == null) {
+                return;
             }
-            entry(mc, label, layout(mc, slot), slot == selected);
-        }
 
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glColor4f(1F, 1F, 1F, 1F);
+            GL11.glTranslated(centre.xCoord - origin.xCoord, centre.yCoord - origin.yCoord,
+                    centre.zCoord - origin.zCoord);
+            GL11.glMultMatrix(frame());
+            // Into interface pixels, with the vertical axis running down as it does everywhere else
+            // in the interface, so that the layout and the font agree without either being a
+            // special case.
+            GL11.glScalef(SCALE, -SCALE, SCALE);
+
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+            for (int slot = 0; slot < SLOTS; slot++) {
+                String label = labelFor(slot);
+                if (label == null) {
+                    continue;
+                }
+                entry(mc, label, layout(mc, slot), slot == selected);
+            }
+
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+        } finally {
+            GL11.glPopAttrib();
+        }
     }
 
     /** One rectangle with its name across it, horizontally and at its own size. */
