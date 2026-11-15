@@ -38,8 +38,18 @@ public final class VRKeyboard {
     private static final float KEY = 0.045F;
     private static final float GAP = 0.006F;
 
-    /** How far behind the face of a key a fingertip must reach to press it. */
+    /** How close to the face of a key a fingertip must come to press it. */
     private static final float DEPTH = 0.035F;
+
+    /**
+     * How far through the board a key goes on holding a fingertip that has pushed past its face.
+     *
+     * <p>Nothing stops a hand at the face of a board that is standing in mid-air, so a poke
+     * carries well past it and comes back out the same way. Without this the far side of the
+     * press region would be a wall the fingertip leaves through on the way in and crosses again on
+     * the way out, which reads as two pokes and types everything twice.
+     */
+    private static final float THROUGH = 0.15F;
 
     private static final String[] ROWS = {
             "1234567890",
@@ -170,7 +180,10 @@ public final class VRKeyboard {
         up = Vec3.createVectorHelper(fx * Math.sin(tilt), Math.cos(tilt), fz * Math.sin(tilt));
     }
 
-    /** Looks for fingertips in keys. Called once a tick while the board is up. */
+    /**
+     * Looks for fingertips in keys. Called once a frame with the rest of the input, not once a
+     * tick, which is what gives a quick poke enough samples to be seen at all.
+     */
     public static void process() {
         Minecraft mc = Minecraft.getMinecraft();
         if (!showing || !VRState.running() || centre == null) {
@@ -181,11 +194,17 @@ public final class VRKeyboard {
             return;
         }
         for (int hand = 0; hand < 2; hand++) {
-            Vec3 tip = MCOpenVR.getSmoothedAimSource(hand, 0.03D);
+            // In world space, because that is the space the board was placed in. The smoothed aim
+            // source on its own is a room position, and measuring it against a board standing in
+            // the world compared a hand a metre from the play area with a board a few hundred
+            // blocks from the world origin: the depth came out in the hundreds and no key could
+            // ever be reached. The board looked right because only the drawing was ever in world
+            // space.
+            Vec3 tip = VR.player().getSmoothedControllerPos_World(hand, 0.03D);
             if (tip == null) {
                 continue;
             }
-            int key = keyUnder(tip);
+            int key = keyUnder(tip, inside[hand]);
             if (key != inside[hand]) {
                 if (key >= 0) {
                     press(mc, key);
@@ -199,12 +218,14 @@ public final class VRKeyboard {
     }
 
     /**
-     * Which key this fingertip is in, or -1.
+     * Which key this fingertip is in, or -1. The tip must be in world space, as the board is.
      *
-     * <p>Only counts while the tip is behind the face of the board and not far behind it, so a
-     * hand resting below the board or waving past it presses nothing.
+     * <p>Only counts while the tip is at the face of the board, so a hand resting below the board
+     * or waving past it presses nothing.
+     *
+     * @param held which key this same tip was in a moment ago, which reaches further back
      */
-    private static int keyUnder(Vec3 tip) {
+    private static int keyUnder(Vec3 tip, int held) {
         double dx = tip.xCoord - centre.xCoord;
         double dy = tip.yCoord - centre.yCoord;
         double dz = tip.zCoord - centre.zCoord;
@@ -213,14 +234,23 @@ public final class VRKeyboard {
         double depth = dx * normal.xCoord + dy * normal.yCoord + dz * normal.zCoord;
         // The side the face looks out of is the side the typist is on, so a finger about to
         // press a key is in front of the board, not behind it. This read the other way round
-        // while the board itself faced the other way, and turning the board round without
-        // turning this is why nothing could be typed on it.
-        if (depth < 0 || depth > DEPTH) {
+        // while the board itself faced the other way.
+        if (depth > DEPTH) {
             return -1;
         }
         double u = dx * right.xCoord + dy * right.yCoord + dz * right.zCoord;
         double v = dx * up.xCoord + dy * up.yCoord + dz * up.zCoord;
 
+        int key = keyAt(u, v);
+        // A key the tip is already holding keeps it however far past the face the poke carries;
+        // any other key is the thin face only, so that a hand behind the board types nothing and
+        // sliding sideways while deep behind it lets go rather than running along the row.
+        double back = key >= 0 && key == held ? -THROUGH : 0.0D;
+        return depth < back ? -1 : key;
+    }
+
+    /** Which key covers this point on the face of the board, in metres from its centre. */
+    private static int keyAt(double u, double v) {
         int index = 0;
         for (int row = 0; row < ROWS.length; row++) {
             String keys = ROWS[row];

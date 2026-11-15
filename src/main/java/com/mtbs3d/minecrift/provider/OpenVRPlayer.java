@@ -1626,7 +1626,25 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 	public Vec3 getControllerPos_World(int c) {
 		return c == 0 ? this.getControllerMainPos_World() : this.getControllerOffhandPos_World();
 	}
-	
+
+	/**
+	 * Where a hand has been over the last moment, averaged, in world space.
+	 *
+	 * <p>{@link MCOpenVR#getSmoothedAimSource} answers in the room's own frame, in metres from the
+	 * play area, because the gameplay trackers that wanted it measure a hand against the head and
+	 * both of those are room positions. Anything that measures a hand against something standing
+	 * in the world needs the same three steps the accessors above take -- world scale, world
+	 * rotation, room origin -- or it is subtracting a position in one frame from a position in
+	 * another and calling the difference a distance.
+	 */
+	public Vec3 getSmoothedControllerPos_World(int controller, double seconds) {
+		Vec3 out = Vec3Util.add(
+				Vec3Util.scale(MCOpenVR.getSmoothedAimSource(controller, seconds), worldScale),
+				getWalkMultOffset());
+		out.rotateAroundY(worldRotationRadians);
+		return out.addVector(roomOrigin.xCoord, roomOrigin.yCoord, roomOrigin.zCoord);
+	}
+
 	@Override
 	public Vec3 getControllerDir_World(int c) {
 		Vector3f v3 = c==0?MCOpenVR.controllerDirection : MCOpenVR.lcontrollerDirection;

@@ -221,6 +221,18 @@ public class MCOpenVR
 
 	/** How far pressing crouch lowers you, in metres. Enough to read as crouching. */
 	private static final float SNEAK_DROP = 0.35f;
+
+	/**
+	 * How far the view is crouched right now, for anything that wants to measure the player.
+	 *
+	 * <p>Every tracked position handed out by this class already has this drop folded into it,
+	 * which is right for drawing and wrong for measuring: a detector asking "how low is the
+	 * player's head?" would see our own crouch and answer yes. Taking the drop back out turns
+	 * the question back into one about the player's body, which is the only one worth asking.
+	 */
+	public static float getViewCrouchDrop() {
+		return sneakDrop;
+	}
 	static Vector3f headDirection = new Vector3f();
 	static Vector3f controllerDirection = new Vector3f();
 	static Vector3f lcontrollerDirection = new Vector3f();
