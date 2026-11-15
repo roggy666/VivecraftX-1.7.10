@@ -211,7 +211,11 @@ public final class VRKeyboard {
 
         Vec3 normal = cross(right, up);
         double depth = dx * normal.xCoord + dy * normal.yCoord + dz * normal.zCoord;
-        if (depth > 0 || depth < -DEPTH) {
+        // The side the face looks out of is the side the typist is on, so a finger about to
+        // press a key is in front of the board, not behind it. This read the other way round
+        // while the board itself faced the other way, and turning the board round without
+        // turning this is why nothing could be typed on it.
+        if (depth < 0 || depth > DEPTH) {
             return -1;
         }
         double u = dx * right.xCoord + dy * right.yCoord + dz * right.zCoord;
