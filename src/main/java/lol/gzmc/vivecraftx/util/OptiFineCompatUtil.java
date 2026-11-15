@@ -9,8 +9,13 @@ import net.minecraft.world.World;
  * <p>Vivecraft was built on OptiFine-patched MCP sources, so it uses things that look vanilla but
  * are not. None of these exist in real 1.7.10: {@code MathHelper.deg2Rad},
  * {@code Block.isPassable}, {@code Block.canStopRayTrace}, {@code Block.SoundType.getStepSound},
- * {@code Block.SoundType.getFrequency}, {@code EntityPlayer.yOffset2}, and a five-argument
- * {@code World.rayTraceBlocks}. Checked against the decompiled sources, not assumed.
+ * {@code Block.SoundType.getFrequency}, and a five-argument {@code World.rayTraceBlocks}. Checked
+ * against the decompiled sources, not assumed.
+ *
+ * <p>{@code Entity.yOffset2} is not one of them, however much it looks like one. It is the same
+ * field as this port's {@code Entity.ySize} -- {@code field_70139_V} in both -- under the mapping
+ * Minecrift shipped, so an expression that used it has to keep using {@code ySize} rather than
+ * lose the term. Dropping it is what put the play area 0.08 m below the floor while crouching.
  */
 public final class OptiFineCompatUtil {
 

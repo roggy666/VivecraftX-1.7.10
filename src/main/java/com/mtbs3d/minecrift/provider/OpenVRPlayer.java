@@ -171,7 +171,15 @@ public class OpenVRPlayer implements IRoomscaleAdapter
     		if(player.isRiding()){
     			y = getPosition(player.ridingEntity, nano).yCoord + player.ridingEntity.getMountedYOffset();
     		} else
-    			y = VRRenderState.interpolatedPlayerPos.yCoord- player.yOffset;
+    			// Left alone, because the only thing that brings us here on a frame is the world
+    			// rotation or the world scale changing, and turning the room about the vertical
+    			// axis cannot move the floor it stands on. Who owns the height is settled: the
+    			// moveEntity hook sets it once a tick from boundingBox.minY, which is where the
+    			// feet actually are. Recomputing it here from posY - yOffset instead made a second
+    			// owner that disagreed with the first by exactly ySize -- 0.08 m while crouched,
+    			// which is where vanilla parks its sneak sink -- so the view fell to one value on
+    			// every frame of the turn and was pulled back to the other at every tick boundary.
+    			y = roomOrigin.yCoord;
 
     		z = VRRenderState.interpolatedPlayerPos.zCoord - campos.zCoord;
     	} else {
@@ -179,9 +187,14 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 
     		if(player.isRiding()){
    				y = player.ridingEntity.posY + player.ridingEntity.getMountedYOffset();
-    		} 
+    		}
     		else
-    			y = player.posY - player.yOffset;
+    			// The feet, read off the box rather than worked out from posY. In 1.7.10 posY is
+    			// the eye line and the box is placed at posY - yOffset + ySize, so subtracting the
+    			// offset on its own lands wherever vanilla's sneak sink has got to rather than on
+    			// the floor. The hook that maintains this origin the rest of the time uses
+    			// boundingBox.minY, and two writers of one number have to mean the same thing by it.
+    			y = player.boundingBox.minY;
 
     		z = player.posZ - campos.zCoord;
     	}
@@ -633,13 +646,25 @@ public class OpenVRPlayer implements IRoomscaleAdapter
     	double y = player.posY;
     	double z = eyePos.zCoord;
 
+    	// Where the box stands now, moved sideways to where the head is. The height has to be the
+    	// box's own, not posY - yOffset: vanilla keeps the crouch sink in ySize, the box sits at
+    	// posY - yOffset + ySize, and so the subtraction on its own starts the destination box
+    	// 0.08 m inside the ground for the few ticks it takes that sink to decay once crouch is
+    	// released. A box that starts inside the ground collides with it, which sends what is meant
+    	// to be "you stepped forward in your room" down the climb-a-block path below -- and that
+    	// path concludes the player is standing in a wall, shifts them and the whole play area by
+    	// the neck model's lean, and plays a footstep, every tick until the sink is gone. Upstream
+    	// had the term; it reads posY - yOffset + yOffset2, which is this port's ySize under
+    	// Minecrift's own mapping of the same field, and was dropped here as an OptiFine addition.
+    	double feet = player.boundingBox.minY;
+
     	// create bounding box at dest position
     	AxisAlignedBB bb = AxisAlignedBB.getBoundingBox(
     			x - (double) playerHalfWidth,
-    			y - (double) player.yOffset,
+    			feet,
     			z - (double) playerHalfWidth,
     			x + (double) playerHalfWidth,
-    			y - (double) player.yOffset + (double) player.height,
+    			feet + (double) player.height,
     			z + (double) playerHalfWidth);
 
     	Vec3 torso = null;
