@@ -12,6 +12,7 @@
     "MixinEntityRenderer",
     "MixinEntityRoomScale",
     "MixinGameSettings",
+    "MixinGuiIngameForge",
     "MixinGuiInventory",
     "MixinGuiOptions",
     "MixinGuiScreen",

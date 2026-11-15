@@ -25,7 +25,7 @@ public class GuiOtherHUDSettings extends BaseGuiSettings
             VRSettings.VrOptions.CROSSHAIR_OCCLUSION,
             //VRSettings.VrOptions.MAX_CROSSHAIR_DISTANCE_AT_BLOCKREACH,
             VRSettings.VrOptions.CROSSHAIR_SCALES_WITH_DISTANCE,
-          //  VRSettings.VrOptions.CHAT_FADE_AWAY,
+            VRSettings.VrOptions.CHAT_FADE_AWAY,
             VRSettings.VrOptions.DUMMY,
     };
     // VIVE END - hide options not supported by tracked controller UI
@@ -103,6 +103,7 @@ public class GuiOtherHUDSettings extends BaseGuiSettings
                 this.guivrSettings.menuCrosshairScale = 1f;
                 this.guivrSettings.useCrosshairOcclusion = false;
                 this.guivrSettings.crosshairScalesWithDistance = false;
+                this.guivrSettings.chatFadeAway = true;
 
 
                 VR.settings().saveOptions();
@@ -139,6 +140,8 @@ public class GuiOtherHUDSettings extends BaseGuiSettings
                 return tooltipLines("vivecraftx.tooltip.crosshairScalesWithDistance");
             case CROSSHAIR_OCCLUSION:
                 return tooltipLines("vivecraftx.tooltip.crosshairOcclusion");
+            case CHAT_FADE_AWAY:
+                return tooltipLines("vivecraftx.tooltip.chatFadeAway");
             default:
                 return null;
         }

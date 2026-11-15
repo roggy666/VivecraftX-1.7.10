@@ -131,6 +131,13 @@ public class OpenVRPlayer implements IRoomscaleAdapter
     	this.roomOrigin.zCoord = z;
         lastRoomUpdateTime = VR.stereo().getCurrentTimeSecs();
         VRRenderState.irpUpdatedThisFrame = onframe;
+        // Every way of placing the play area works from the world rotation in force while it does
+        // so, whether it anchors to the entity, carries the room along with a vehicle, or simply
+        // translates it; so whatever comes out is the right origin for that rotation and for no
+        // other. The angle is recorded here with the position for that reason -- the two are
+        // halves of one answer, and the next turn is the step from this angle rather than from
+        // whatever the setting happened to say at the start of the tick.
+        this.appliedWorldRotation = this.worldRotationRadians;
     }
     
     
@@ -205,9 +212,99 @@ public class OpenVRPlayer implements IRoomscaleAdapter
     
     public  double topofhead = 1.62;
         
-    private float lastworldRotation= 0f;
 	private float lastWorldScale;
-    
+
+	/**
+	 * The world rotation the origin standing in {@link #roomOrigin} was worked out for.
+	 *
+	 * <p>Not the rotation at the start of the tick, which is what this used to be compared
+	 * against: a turn has to be answered once, as the step from the arrangement the play area
+	 * actually has to the one it should have. Comparing against a per-tick snapshot instead meant
+	 * every frame for the rest of the tick saw the same difference and answered it again.
+	 */
+	private float appliedWorldRotation;
+
+	/** Said once, if turning ever moves the point it is meant to turn about. */
+	private boolean reportedPivotDrift;
+
+	/**
+	 * The point the player's head turns about, in the play area's own frame.
+	 *
+	 * <p>Not the eyes. A head on a neck carries its eyes through an arc when it turns, and the
+	 * point that stays still is roughly a hand's width down and back from them -- the offset below
+	 * is in the headset's own axes, which look down their negative Z. Turning the world about the
+	 * eyes instead would leave the player displaced by that same arm, so the turn would read as
+	 * the world sliding a little as it came round rather than as the player turning on the spot.
+	 *
+	 * <p>Scaled with the world for the same reason everything else is: in a shrunken world a tenth
+	 * of a metre is a long way, and a pivot left at full size would sit outside the head it
+	 * belongs to.
+	 */
+	private Vec3 getHeadPivot_Room() {
+		Vec3 head = getHMDPos_Room();
+		Vector3f offset = MCOpenVR.hmdRotation.transform(
+				new Vector3f(0f, -0.1f * worldScale, 0.1f * worldScale));
+		return head.addVector(offset.x, offset.y, offset.z);
+	}
+
+	/** A point in the play area, placed in the world by a given rotation and the origin as it is. */
+	private Vec3 roomToWorld(Vec3 room, float rotationRadians) {
+		Vec3 out = Vec3.createVectorHelper(room.xCoord, room.yCoord, room.zCoord);
+		out.rotateAroundY(rotationRadians);
+		return out.addVector(roomOrigin.xCoord, roomOrigin.yCoord, roomOrigin.zCoord);
+	}
+
+	/**
+	 * Turns the play area under the player, about the point their head turns about.
+	 *
+	 * <p>That is the whole of what a world rotation is: the room the player is standing in has to
+	 * come to face a different way without the player going anywhere. Left to itself the rotation
+	 * is about the play area's origin -- the floor under wherever the room was last anchored --
+	 * so the player swings around that on a circle as wide as they happen to be standing from it,
+	 * which is the sensation of a fairground ride rather than of turning. Moving the origin by
+	 * however far the pivot would otherwise have travelled leaves the pivot where it was, and that
+	 * is the same operation as rotating the origin about the pivot.
+	 *
+	 * <p>Y is never touched. A rotation about the vertical axis cannot change a height, and this
+	 * height is the floor's, which is maintained once a tick from the player's own bounding box.
+	 *
+	 * <p>Both positions are worked out with the same rotation the renderer uses rather than from
+	 * the sine and cosine of the step between them, which is the same arithmetic but leaves the
+	 * pivot exactly where it was instead of within the resolution of MathHelper's sine table.
+	 * Smooth turning comes through here ninety times a second and nothing re-anchors the play area
+	 * afterwards, so a fraction of a millimetre a step would accumulate into the player's real
+	 * floor drifting away from the one they can see.
+	 *
+	 * <p>Marked as a reset because the rotation being cancelled is not interpolated: the renderer
+	 * takes the new angle the moment it exists, so an origin that eased towards its new place over
+	 * the remaining frames of the tick would trace exactly the arc this method exists to prevent.
+	 */
+	private void rotateOriginAroundHead(float fromRotation, float toRotation, boolean onFrame) {
+		Vec3 pivot = getHeadPivot_Room();
+		Vec3 before = roomToWorld(pivot, fromRotation);
+		Vec3 after = roomToWorld(pivot, toRotation);
+
+		setRoomOrigin(
+				roomOrigin.xCoord + before.xCoord - after.xCoord,
+				roomOrigin.yCoord,
+				roomOrigin.zCoord + before.zCoord - after.zCoord,
+				true, onFrame);
+
+		// The one thing this method promises, so it is worth hearing about if it ever stops being
+		// true. Upstream works the same quantity out and leaves it in a local for a debugger to
+		// look at; it is cheap enough to check properly. It compares the pivot against where this
+		// method found it rather than against the start of the tick, so being carried along by a
+		// boat or a cart is not mistaken for a failure here.
+		Vec3 now = roomToWorld(pivot, toRotation);
+		double moved = Math.abs(now.xCoord - before.xCoord) + Math.abs(now.zCoord - before.zCoord);
+		if (moved > 0.01D && !reportedPivotDrift) {
+			reportedPivotDrift = true;
+			ViveCraftX.LOG.warn(String.format(
+					"Turning the world moved the head %.4f m instead of leaving it where it was",
+					moved));
+		}
+	}
+
 	public void checkandUpdateRotateScale(boolean onFrame, float nano){
 		Minecraft mc = Minecraft.getMinecraft();
 		if (mc.thePlayer == null || !VanillaExt.isInitFromServer(mc.thePlayer)) return;
@@ -226,13 +323,18 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 				this.wfCount--;
 			} else 	this.worldScale =  VR.settings().vrWorldScale;
 		}
+	    float from = appliedWorldRotation;
 	    this.worldRotationRadians = (float) Math.toRadians(VR.settings().vrWorldRotation);
-	    
-	    if (worldRotationRadians!= lastworldRotation || worldScale != lastWorldScale) {
-	    	if(mc.thePlayer!=null) 
-	    		snapRoomOriginToPlayerEntity(mc.thePlayer, true, onFrame, nano);
+
+	    if (worldScale != lastWorldScale) {
+	    	// Growing or shrinking the world moves the player within it as well as moving the
+	    	// room, so there is no point that stays still to turn about and the play area has to
+	    	// be put back under the entity outright, as it always was.
+	    	snapRoomOriginToPlayerEntity(mc.thePlayer, true, onFrame, nano);
+	    } else if (worldRotationRadians != from) {
+	    	rotateOriginAroundHead(from, worldRotationRadians, onFrame);
 	    }
-	    if(!onFrame)    lastWorldScale = worldScale;		
+	    if(!onFrame)    lastWorldScale = worldScale;
 	}
 	
 	/**
@@ -279,7 +381,6 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 	}
 
 	public void preTick(){
-		lastworldRotation = worldRotationRadians;
 		lastroomOrigin = Vec3.createVectorHelper(roomOrigin.xCoord, roomOrigin.yCoord, roomOrigin.zCoord);
 	}
 

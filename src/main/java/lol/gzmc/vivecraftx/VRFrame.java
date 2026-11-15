@@ -89,6 +89,16 @@ public final class VRFrame {
         pos.yCoord = view.lastTickPosY + (view.posY - view.lastTickPosY) * partialTicks;
         pos.zCoord = view.lastTickPosZ + (view.posZ - view.lastTickPosZ) * partialTicks;
 
+        // Before the origin is settled below, because this is the thing that may move it: a turn
+        // taken since the last frame is answered here by swinging the play area about the player's
+        // head, and the flag that leaves behind is what tells the interpolation to take the new
+        // position whole instead of easing into it. In the other order -- which is how this stood
+        // -- the frame that turned the world was drawn with the origin from before the turn, since
+        // the renderer takes the new angle immediately but the compensating origin only reached
+        // the screen a frame later. For that one frame the world turned about the middle of the
+        // play area rather than about the head, and with smooth turning that frame is every frame.
+        player.checkandUpdateRotateScale(true, partialTicks);
+
         Vec3 origin = VRRenderState.interPolatedRoomOrigin;
         if (VRRenderState.irpUpdatedThisFrame) {
             // the origin was already moved for this frame, so interpolating it again would
@@ -104,8 +114,6 @@ public final class VRFrame {
             origin.zCoord = lerp(player.lastroomOrigin.zCoord, player.roomOrigin.zCoord,
                     partialTicks);
         }
-
-        player.checkandUpdateRotateScale(true, partialTicks);
 
         // The bow is the one tracker driven per frame rather than per tick: drawing it is a
         // continuous gesture, and sampling it at twenty hertz would make the draw feel notched.

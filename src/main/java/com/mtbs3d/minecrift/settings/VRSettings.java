@@ -384,6 +384,16 @@ public class VRSettings
     public boolean hudOcclusion = false;
 
     /**
+     * Whether incoming chat fades away the way it does flat, or the latest lines stay put.
+     *
+     * <p>True, which is vanilla, by default: a line that stays is a line covering part of the
+     * panel, and the player who wants that should be the one to ask for it. The option exists
+     * because fading assumes you were looking at the message when it arrived, and in a headset
+     * you were probably looking at the world.
+     */
+    public boolean chatFadeAway = true;
+
+    /**
      * Whether SteamVR's binding editor shows the sets that are plumbing rather than controls.
      *
      * <p>Off by default, because the editor is confusing enough with the controls alone, and a
@@ -717,6 +727,11 @@ public class VRSettings
                     if (optionTokens[0].equals("hideGui"))
                     {
                         this.hideGui = optionTokens[1].equals("true");
+                    }
+
+                    if (optionTokens[0].equals("chatFadeAway"))
+                    {
+                        this.chatFadeAway = optionTokens[1].equals("true");
                     }
 
                     // VIVE START - new options
@@ -1123,6 +1138,9 @@ public class VRSettings
                 return var4 + onOff(this.menuBackground);
 	        case HUD_HIDE:
 	            return var4 + yesNo(this.hideGui);
+	        case CHAT_FADE_AWAY:
+	            return var4 + tr(this.chatFadeAway ? "vivecraftx.value.chatPersistence.fades"
+	                                               : "vivecraftx.value.chatPersistence.stays");
 	        case RENDER_FULL_FIRST_PERSON_MODEL_MODE:
                 if (this.renderFullFirstPersonModelMode == RENDER_FIRST_PERSON_FULL)
                     return var4 + tr("vivecraftx.value.firstPerson.full");
@@ -1480,6 +1498,9 @@ public class VRSettings
                 break;
 	        case HUD_HIDE:
 	            this.hideGui = !this.hideGui;
+	            break;
+	        case CHAT_FADE_AWAY:
+	            this.chatFadeAway = !this.chatFadeAway;
 	            break;
 	        case RENDER_FULL_FIRST_PERSON_MODEL_MODE:
                 this.renderFullFirstPersonModelMode++;
@@ -1922,6 +1943,7 @@ public class VRSettings
             var5.println("smoothRunTickCount:" + this.smoothRunTickCount);
             var5.println("smoothTick:" + this.smoothTick);
             var5.println("hideGui:" + this.hideGui);
+            var5.println("chatFadeAway:" + this.chatFadeAway);
             //VIVE
             var5.println("simulateFalling:" + this.simulateFalling);
             var5.println("weaponCollision:" + this.weaponCollision);

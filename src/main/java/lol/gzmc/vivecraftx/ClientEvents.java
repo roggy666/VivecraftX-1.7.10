@@ -2,9 +2,11 @@ package lol.gzmc.vivecraftx;
 
 import cpw.mods.fml.common.gameevent.TickEvent;
 
+import lol.gzmc.vivecraftx.render.VRChat;
 import lol.gzmc.vivecraftx.render.VRCursor;
 
 import net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -83,6 +85,19 @@ public class ClientEvents {
             lol.gzmc.vivecraftx.net.VRPlayers.clear();
             lol.gzmc.vivecraftx.net.VRServerRules.clear();
         }
+    }
+
+    /**
+     * Moves the incoming chat into the part of the interface panel the player can actually read.
+     *
+     * <p>Forge posts this with the position it is about to draw the chat at and then uses whatever
+     * the event says, so the whole adjustment is two public fields and no patching of the chat
+     * renderer. Which position that should be is {@link VRChat}'s to decide, and it leaves it
+     * alone in every case where vanilla's corner is already right.
+     */
+    @SubscribeEvent
+    public void onRenderChat(RenderGameOverlayEvent.Chat event) {
+        event.posX = VRChat.blockLeft(event.resolution.getScaledWidth(), event.posX);
     }
 
     /**
