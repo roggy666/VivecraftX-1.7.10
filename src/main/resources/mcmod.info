@@ -1,0 +1,15 @@
+[
+{
+  "modid": "${modId}",
+  "name": "${modName}",
+  "description": "VR support for Minecraft 1.7.10, rebuilt as a Forge mod. Based on Vivecraft/minecrift by StellaArtois, mabrowning and jrbudda.",
+  "version": "${modVersion}",
+  "mcversion": "${minecraftVersion}",
+  "url": "",
+  "authors": ["roggy666"],
+  "credits": "Vivecraft / minecrift by StellaArtois, mabrowning and jrbudda",
+  "logoFile": "assets/vivecraftx/logo.png",
+  "screenshots": [],
+  "dependencies": []
+}
+]

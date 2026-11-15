@@ -1,18 +1,17 @@
-# Set default behaviour, in case users don't have core.autocrlf set.
-* text=auto
-
-# Explicitly declare text files we want to always be normalized and converted 
-# to native line endings on checkout.
-*.java text
-
-# Explicitly declare text files we want to always be CR line endings on checkout.
-*.patch text eol=cr
-
-# Declare files that will always have CRLF line endings on checkout.
-*.sln text eol=crlf
-*.bat text eol=crlf
-*.crlf text eol=crlf
-
-# Denote all files that are truly binary and should not be modified.
+# Keep the shipped runtime libraries byte for byte.
+#
+# Git guesses whether a file is text and rewrites line endings in the ones it
+# decides are. It guessed wrong about these: both Windows libraries lost a
+# handful of bytes to that rewriting and stopped being loadable executables,
+# and the only reason VR kept working was that the loader could not find them
+# and quietly borrowed SteamVR's own copy instead.
+*.dll binary
+*.so binary
+*.dylib binary
+*.jar binary
 *.png binary
-*.jpg binary
+
+# The language files are read line by line as UTF-8 by the game itself, and a key is whatever
+# precedes the first '=' on a line. Pinning them to LF keeps a checkout on Windows from putting
+# a carriage return at the end of every value.
+*.lang text eol=lf

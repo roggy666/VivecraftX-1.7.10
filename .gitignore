@@ -26,3 +26,13 @@ jars/
 *.ex_
 mcppatches - Copy/
 hs_err_pid*.log
+
+# --- Forge mod rebuild ---
+/build/
+/.gradle/
+/run/
+Refs/
+*.hprof
+
+# Porting notes: working material, not part of the mod
+PORTING-*.md

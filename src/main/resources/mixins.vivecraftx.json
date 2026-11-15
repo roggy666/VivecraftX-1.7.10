@@ -1,0 +1,31 @@
+{
+  "required": true,
+  "minVersion": "0.8.3-GTNH",
+  "package": "lol.gzmc.vivecraftx.mixins",
+  "refmap": "mixins.vivecraftx.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "client": [
+    "MixinClientPlayerMoveUpdates",
+    "MixinEntityClientPlayerMP",
+    "MixinEntityPlayerSP",
+    "MixinEntityRenderer",
+    "MixinEntityRoomScale",
+    "MixinGameSettings",
+    "MixinGuiInventory",
+    "MixinGuiOptions",
+    "MixinGuiScreen",
+    "MixinKeyBinding",
+    "MixinMinecraft",
+    "MixinModelBase",
+    "MixinModelBiped",
+    "MixinMovementInput",
+    "MixinPlayerControllerMP",
+    "MixinRenderGlobalSelf",
+    "MixinRenderPlayerSelf"
+  ],
+  "mixins": [
+    "MixinEntityPlayer"
+  ],
+  "server": []
+}
