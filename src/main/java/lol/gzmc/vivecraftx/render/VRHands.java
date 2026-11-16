@@ -185,85 +185,95 @@ public final class VRHands {
      */
     private static void renderHeldItem(Minecraft mc, float partialTicks, int controller,
             ItemStack held) {
-        if (held == null || held.getItem() == null) {
-            return;
-        }
-        Vec3 pos = VRRenderState.getControllerRenderPos(controller);
-        FloatBuffer rotation = VR.roomScale().getControllerMatrix_World(controller);
-        if (pos == null || rotation == null) {
-            return;
-        }
-        Vec3 origin = VRRenderState.interpolatedPlayerPos;
-        float worldScale = VR.player().worldScale;
-
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPushMatrix();
-        GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glPushMatrix();
-        boolean prepared = false;
+        // The item is tinted layer by layer, and a layer that throws leaves the tint behind:
+        // the catch below swallows it, so the rest of this eye is drawn in whatever colour the
+        // last layer wanted. Handing the state block to the driver is the same answer the
+        // overlays already use, and it holds on the paths that return early as well.
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_CURRENT_BIT);
         try {
-            if (!VRCamera.reapplyEyeCamera()) {
+            if (held == null || held.getItem() == null) {
                 return;
             }
-            GL11.glEnable(GL12.GL_RESCALE_NORMAL);
-            // While the matrix is still the eye's. The two lights this sets up are positioned in
-            // whatever matrix is current, so doing it after the controller's pose would pin them
-            // to the controller and the item's lit and shadowed faces would swap as the wrist
-            // turned.
-            RenderHelper.enableStandardItemLighting();
-            mc.entityRenderer.enableLightmap(partialTicks);
-            prepared = true;
-            setHandLight(mc);
-
-            GL11.glTranslated(pos.xCoord - origin.xCoord, pos.yCoord - origin.yCoord,
-                    pos.zCoord - origin.zCoord);
-            rotation.rewind();
-            GL11.glMultMatrix(rotation);
-            // The world can be made larger or smaller around the player; the hand and what it
-            // holds belong to the world, not to the player.
-            GL11.glScalef(worldScale, worldScale, worldScale);
-
-            applySwing(mc, controller, partialTicks);
-
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-            int drawnAs = drawnAs(held);
-            applyItemTransform(held, drawnAs, controller);
-            if (held.getItem() instanceof ItemMap) {
-                // A map is not drawn from a sprite, so there is no sprite pose to undo.
-                drawMap(mc, held);
-            } else {
-                applyDisplayTransform(drawnAs, isRodLike(held.getItem()));
-                if (drawnAs == DRAWN_AS_ICON) {
-                    // Turned inside out by the mirror above: every face now winds the other way,
-                    // and the side the game would keep is the side facing away. Drawing both
-                    // costs a handful of triangles on something the size of a sword and is
-                    // steadier than telling the driver which way round front has become.
-                    boolean culling = GL11.glIsEnabled(GL11.GL_CULL_FACE);
-                    GL11.glDisable(GL11.GL_CULL_FACE);
-                    try {
-                        drawItem(mc, held);
-                    } finally {
-                        if (culling) {
-                            GL11.glEnable(GL11.GL_CULL_FACE);
-                        }
-                    }
-                } else {
-                    drawItem(mc, held);
-                }
+            Vec3 pos = VRRenderState.getControllerRenderPos(controller);
+            FloatBuffer rotation = VR.roomScale().getControllerMatrix_World(controller);
+            if (pos == null || rotation == null) {
+                return;
             }
-        } catch (Throwable t) {
-            ViveCraftX.LOG.debug("The held item failed to draw", t);
-        } finally {
-            if (prepared) {
-                mc.entityRenderer.disableLightmap(partialTicks);
-                RenderHelper.disableStandardItemLighting();
-                GL11.glDisable(GL12.GL_RESCALE_NORMAL);
-            }
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glPopMatrix();
+            Vec3 origin = VRRenderState.interpolatedPlayerPos;
+            float worldScale = VR.player().worldScale;
+
             GL11.glMatrixMode(GL11.GL_PROJECTION);
-            GL11.glPopMatrix();
+            GL11.glPushMatrix();
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPushMatrix();
+            boolean prepared = false;
+            try {
+                if (!VRCamera.reapplyEyeCamera()) {
+                    return;
+                }
+                GL11.glEnable(GL12.GL_RESCALE_NORMAL);
+                // While the matrix is still the eye's. The two lights this sets up are positioned in
+                // whatever matrix is current, so doing it after the controller's pose would pin them
+                // to the controller and the item's lit and shadowed faces would swap as the wrist
+                // turned.
+                RenderHelper.enableStandardItemLighting();
+                mc.entityRenderer.enableLightmap(partialTicks);
+                prepared = true;
+                setHandLight(mc);
+
+                GL11.glTranslated(pos.xCoord - origin.xCoord, pos.yCoord - origin.yCoord,
+                        pos.zCoord - origin.zCoord);
+                rotation.rewind();
+                GL11.glMultMatrix(rotation);
+                // The world can be made larger or smaller around the player; the hand and what it
+                // holds belong to the world, not to the player.
+                GL11.glScalef(worldScale, worldScale, worldScale);
+
+                applySwing(mc, controller, partialTicks);
+
+                GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+                int drawnAs = drawnAs(held);
+                applyItemTransform(held, drawnAs, controller);
+                if (held.getItem() instanceof ItemMap) {
+                    // A map is not drawn from a sprite, so there is no sprite pose to undo.
+                    drawMap(mc, held);
+                } else {
+                    applyDisplayTransform(drawnAs, isRodLike(held.getItem()));
+                    if (drawnAs == DRAWN_AS_ICON) {
+                        // Turned inside out by the mirror above: every face now winds the other way,
+                        // and the side the game would keep is the side facing away. Drawing both
+                        // costs a handful of triangles on something the size of a sword and is
+                        // steadier than telling the driver which way round front has become.
+                        boolean culling = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+                        GL11.glDisable(GL11.GL_CULL_FACE);
+                        try {
+                            drawItem(mc, held);
+                        } finally {
+                            if (culling) {
+                                GL11.glEnable(GL11.GL_CULL_FACE);
+                            }
+                        }
+                    } else {
+                        drawItem(mc, held);
+                    }
+                }
+            } catch (Throwable t) {
+                ViveCraftX.LOG.debug("The held item failed to draw", t);
+            } finally {
+                if (prepared) {
+                    mc.entityRenderer.disableLightmap(partialTicks);
+                    RenderHelper.disableStandardItemLighting();
+                    GL11.glDisable(GL12.GL_RESCALE_NORMAL);
+                }
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                GL11.glPopMatrix();
+                GL11.glMatrixMode(GL11.GL_PROJECTION);
+                GL11.glPopMatrix();
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            }
+        } finally {
+            GL11.glPopAttrib();
         }
     }
 
