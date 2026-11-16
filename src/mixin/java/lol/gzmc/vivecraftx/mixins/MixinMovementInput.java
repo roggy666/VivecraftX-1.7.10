@@ -47,19 +47,40 @@ public abstract class MixinMovementInput extends MovementInput {
     private void vivecraftx$moveByAxis(CallbackInfo ci) {
         Minecraft mc = Minecraft.getMinecraft();
         VRSettings settings = VR.settings();
-        if (!VRState.running() || settings == null || settings.seated
-                || mc.currentScreen != null || MCOpenVR.keyboardShowing) {
+        if (!VRState.running() || settings == null) {
+            return;
+        }
+
+        // Crouching physically makes the player crouch. The detector worked and its answer was
+        // read in one place only -- to stop the view being dropped a second time -- so bending
+        // your knees lowered the camera and the character never sneaked: no slowdown, no ledge
+        // protection, the name tag still showing, and no fitting through a one-block gap. Both
+        // references close the loop here. Vanilla has already scaled the key-derived movement by
+        // the time this runs, so where we are the ones turning sneaking on, the same reduction is
+        // applied; if the stick replaces those values below, the test further down scales the new
+        // ones instead and nothing is scaled twice.
+        if (!this.sneak && mc.currentScreen == null && VR.sneakTracker() != null
+                && VR.sneakTracker().sneakOverride) {
+            this.sneak = true;
+            this.moveStrafe *= 0.3F;
+            this.moveForward *= 0.3F;
+        }
+
+        if (settings.seated || mc.currentScreen != null || MCOpenVR.keyboardShowing) {
+            vivecraftx$letGoOfAxisKeys(mc);
             return;
         }
         // Climbing is done with the hands; letting the stick move you as well would fight it.
         if (VR.climbTracker() != null && mc.thePlayer != null
                 && VR.climbTracker().isGrabbingLadder() && !mc.thePlayer.isInWater()) {
+            vivecraftx$letGoOfAxisKeys(mc);
             return;
         }
 
         VRInputAction strafe = MCOpenVR.getInputAction(MCOpenVR.keyFreeMoveStrafe);
         VRInputAction rotate = MCOpenVR.getInputAction(MCOpenVR.keyFreeMoveRotate);
         if (strafe == null || rotate == null) {
+            vivecraftx$letGoOfAxisKeys(mc);
             return;
         }
         Vector2 strafeAxis = strafe.getAxis2DUseTracked();
@@ -93,14 +114,7 @@ public abstract class MixinMovementInput extends MovementInput {
         }
 
         if (!set) {
-            if (this.vivecraftx$movementSetByAxis) {
-                // the stick has returned to centre, so the keys it was standing in for are let go
-                KeyBindingUtil.setState(mc.gameSettings.keyBindForward, false);
-                KeyBindingUtil.setState(mc.gameSettings.keyBindBack, false);
-                KeyBindingUtil.setState(mc.gameSettings.keyBindLeft, false);
-                KeyBindingUtil.setState(mc.gameSettings.keyBindRight, false);
-                this.vivecraftx$movementSetByAxis = false;
-            }
+            vivecraftx$letGoOfAxisKeys(mc);
             return;
         }
         this.vivecraftx$movementSetByAxis = true;
@@ -128,6 +142,25 @@ public abstract class MixinMovementInput extends MovementInput {
         KeyBindingUtil.setState(mc.gameSettings.keyBindBack, this.moveForward < 0);
         KeyBindingUtil.setState(mc.gameSettings.keyBindLeft, this.moveStrafe > 0);
         KeyBindingUtil.setState(mc.gameSettings.keyBindRight, this.moveStrafe < 0);
+    }
+
+    /**
+     * Lets go of the keys the stick was standing in for.
+     *
+     * <p>Reached from every way out of the method above, not only from the stick returning to
+     * centre. Grabbing a ladder, opening a screen or raising the keyboard with the stick still
+     * pushed used to leave those keys held: the game went on reading them, so letting go of the
+     * ladder walked you off in whatever direction you had last been pushing.
+     */
+    private void vivecraftx$letGoOfAxisKeys(Minecraft mc) {
+        if (!this.vivecraftx$movementSetByAxis) {
+            return;
+        }
+        KeyBindingUtil.setState(mc.gameSettings.keyBindForward, false);
+        KeyBindingUtil.setState(mc.gameSettings.keyBindBack, false);
+        KeyBindingUtil.setState(mc.gameSettings.keyBindLeft, false);
+        KeyBindingUtil.setState(mc.gameSettings.keyBindRight, false);
+        this.vivecraftx$movementSetByAxis = false;
     }
 
     /** Zeroes an axis that has not left the middle far enough to mean anything. */

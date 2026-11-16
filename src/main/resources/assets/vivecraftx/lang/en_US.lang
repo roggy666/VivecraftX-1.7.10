@@ -76,6 +76,8 @@ vivecraftx.option.chatHaptics=Buzz On Chat
 vivecraftx.option.realisticDismount=Step Out To Dismount
 vivecraftx.option.realisticOpening=Push Doors Open
 vivecraftx.option.physicalKeyboard=Keyboard
+vivecraftx.option.keyboardLayout=Keyboard Layout
+vivecraftx.option.autoOpenKeyboard=Open On Text Field
 vivecraftx.option.fovReductionMin=Vision Narrowing Amount
 vivecraftx.option.smoothTurnSpeed=Smooth Turn Speed
 vivecraftx.option.teleportUpLimit=Teleport Up Limit
@@ -242,6 +244,13 @@ vivecraftx.value.freemove.hmd=HMD
 vivecraftx.value.freemove.runInPlace=RunInPlace
 vivecraftx.value.freemove.joypad=Joy/Pad
 
+#  The in-world keyboard: the name of a layout, which is what the key that switches them
+#  says, and the hint an empty text field shows while there is no keyboard up.
+vivecraftx.keyboard.layout.en=QWERTY
+vivecraftx.keyboard.layout.ru=ЙЦУКЕН
+vivecraftx.keyboard.layout.custom=Custom
+vivecraftx.keyboard.clickToOpen=Click to open keyboard
+
 #  Screen titles.
 vivecraftx.screen.vrSettings=VR Settings
 vivecraftx.screen.locomotion=Locomotion Settings
@@ -363,6 +372,8 @@ vivecraftx.tooltip.hudScale=Relative size HUD takes up in field-of-view\n  The u
 vivecraftx.tooltip.hudPitch=The vertical offset of the HUD, in degrees.\n  Negative values are down, positive up.
 vivecraftx.tooltip.hudYaw=The horizontal offset of the HUD, in degrees.\n  Negative values are to the left, positive to\n  the right.
 vivecraftx.tooltip.physicalKeyboard=Which keyboard appears when you ask for one.\n  IN WORLD: one standing in front of you that you\n       poke with your fingertips. Stays where you\n       put it and works without window focus.\n  STEAMVR: SteamVR's own, which floats over\n       everything and is off in seated mode.
+vivecraftx.tooltip.keyboardLayout=Which characters the in-world keyboard shows.\n  QWERTY: English.\n  ЙЦУКЕН: Russian.\n  CUSTOM: whatever keyboardKeys and\n       keyboardKeysShift hold in the settings file.\n  The same key is on the keyboard itself, bottom\n  left, so the layout can be changed while typing.
+vivecraftx.tooltip.autoOpenKeyboard=Whether an ordinary text field brings a keyboard\nup when it is typed into.\n  ON:  any field that takes focus opens one. This\n       is what search boxes and other mods' fields\n       need, including ones that are not screens.\n  OFF: only the chat line opens one by itself;\n       everything else waits for the keyboard key.
 vivecraftx.tooltip.hudWristOffset=How far along your forearm the wrist HUD sits.\n  Higher values move it back towards the elbow,\n  lower ones towards the hand. Only used when\n  the HUD is locked to the wrist.
 vivecraftx.tooltip.hudDistance=Distance the floating HUD is drawn in front of your body\n  The relative size of the HUD is unchanged by this\n  Distance is in meters (though isn't obstructed by blocks)
 vivecraftx.tooltip.hudOcclusion=Specifies whether the HUD is occluded by closer objects.\n  ON:  The HUD will be hidden by closer objects. May\n       be hidden completely in confined environments!\n  OFF: The HUD is always visible. Stereo depth issues\n       may be noticable.

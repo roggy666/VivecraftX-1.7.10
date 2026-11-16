@@ -5,7 +5,6 @@ import lol.gzmc.vivecraftx.render.VRModelPose;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.RenderPlayer;
-import net.minecraft.entity.EntityLivingBase;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -35,8 +34,12 @@ public class MixinRenderPlayerSelf {
     @Unique
     private boolean vivecraftx$turned;
 
-    @Inject(method = "doRender(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", at = @At("HEAD"))
-    private void vivecraftx$faceTheRightWay(EntityLivingBase entity, double x, double y, double z,
+    // The overload that is actually called. Of the three, the two that take a wider type are
+    // bridges the compiler generated, and both cast straight down to this one rather than to each
+    // other -- so a hook on either of them is accepted without complaint and never runs.
+    @Inject(method = "doRender(Lnet/minecraft/client/entity/AbstractClientPlayer;DDDFF)V",
+            at = @At("HEAD"))
+    private void vivecraftx$faceTheRightWay(AbstractClientPlayer entity, double x, double y, double z,
             float yaw, float partialTicks, CallbackInfo ci) {
         this.vivecraftx$turned = false;
         if (entity != Minecraft.getMinecraft().thePlayer || !VRModelPose.inWorld()) {
@@ -53,8 +56,9 @@ public class MixinRenderPlayerSelf {
         entity.renderYawOffset = entity.prevRenderYawOffset = body.floatValue();
     }
 
-    @Inject(method = "doRender(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", at = @At("RETURN"))
-    private void vivecraftx$faceBack(EntityLivingBase entity, double x, double y, double z,
+    @Inject(method = "doRender(Lnet/minecraft/client/entity/AbstractClientPlayer;DDDFF)V",
+            at = @At("RETURN"))
+    private void vivecraftx$faceBack(AbstractClientPlayer entity, double x, double y, double z,
             float yaw, float partialTicks, CallbackInfo ci) {
         if (this.vivecraftx$turned) {
             entity.renderYawOffset = this.vivecraftx$yaw;

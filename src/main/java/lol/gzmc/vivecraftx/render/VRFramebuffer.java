@@ -85,7 +85,11 @@ public class VRFramebuffer extends Framebuffer {
         this.framebufferTexture = adopt;
         this.external = true;
 
-        setFramebufferFilter(GL11.GL_NEAREST);
+        // Linear, because the eye textures are what the scene buffer is resolved onto and that
+        // resolve is a resize whenever the render scale is not one. Vanilla's own framebuffers
+        // are built with nearest sampling, which is right for a window blit at matching size and
+        // wrong for this.
+        setFramebufferFilter(GL11.GL_LINEAR);
         OpenGlHelper.func_153171_g(OpenGlHelper.field_153198_e, this.framebufferObject);
         OpenGlHelper.func_153188_a(OpenGlHelper.field_153198_e, OpenGlHelper.field_153200_g,
                 GL11.GL_TEXTURE_2D, adopt, 0);

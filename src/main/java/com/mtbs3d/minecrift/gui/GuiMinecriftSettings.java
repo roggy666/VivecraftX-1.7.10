@@ -142,11 +142,19 @@ public class GuiMinecriftSettings extends BaseGuiSettings implements GuiEventEx
     			else if (o == VrOptions.WORLD_ROTATION){
                      minValue = 0f;
                      maxValue = 360f;
+                     // Zero is a legitimate increment -- it is what "smooth" means -- and a
+                     // slider that snaps to multiples of it divides by it. Handed straight over,
+                     // this knob was pinned to its left end for anyone using smooth turning.
                      increment = VR.settings().vrWorldRotationIncrement;
+                     if (increment <= 0f) {
+                         increment = 1f;
+                     }
     			}
     			else if (o == VrOptions.WORLD_ROTATION_INCREMENT){
                     minValue = 0f;
-                    maxValue = 4f;
+                    // Six positions, not five: the setter maps 0 through 5 onto smooth, 10, 36,
+                    // 45, 90 and 180 degrees, so stopping at four put 180 out of reach entirely.
+                    maxValue = 5f;
                     increment = 1f;
    			}
     	        GuiSliderEx slider = new GuiSliderEx(o.returnEnumOrdinal(), width, height, o, this.guivrSettings.getKeyBinding(o), minValue, maxValue, increment, this.guivrSettings.getOptionFloatValue(o));

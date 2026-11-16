@@ -5,9 +5,11 @@
   "refmap": "mixins.vivecraftx.refmap.json",
   "target": "@env(DEFAULT)",
   "compatibilityLevel": "JAVA_8",
+  "injectors": {
+    "defaultRequire": 1
+  },
   "client": [
     "MixinClientPlayerMoveUpdates",
-    "MixinEntityClientPlayerMP",
     "MixinEntityPlayerSP",
     "MixinEntityRenderer",
     "MixinEntityRoomScale",
@@ -16,6 +18,7 @@
     "MixinGuiInventory",
     "MixinGuiOptions",
     "MixinGuiScreen",
+    "MixinGuiTextField",
     "MixinKeyBinding",
     "MixinMinecraft",
     "MixinModelBase",

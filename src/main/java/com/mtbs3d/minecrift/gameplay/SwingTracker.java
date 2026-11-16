@@ -115,6 +115,14 @@ public class SwingTracker {
 
     public void doProcess(Minecraft mc, EntityClientPlayerMP player) {
         if (!isActive(player)) {
+            // Letting go of the aim as well as standing down. This flag points the player's
+            // reported yaw and pitch at their own hand, which is right while dipping a bucket and
+            // wrong the instant anything interrupts: it is only ever cleared further down, so a
+            // dip that was cut short by running on the spot, or by the setting being turned off,
+            // left the player aiming at their own fist for the rest of the session -- arrows into
+            // the ground, attacks resolved in the wrong direction.
+            this.shouldLookAtHand = false;
+            this.amLookingAtHand = false;
             return;
         }
         mc.mcProfiler.startSection("swing");

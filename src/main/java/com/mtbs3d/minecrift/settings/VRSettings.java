@@ -7,6 +7,7 @@ package com.mtbs3d.minecrift.settings;
 import lol.gzmc.vivecraftx.VRRenderState;
 
 import lol.gzmc.vivecraftx.VR;
+import lol.gzmc.vivecraftx.render.VRKeyboardLayout;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -275,6 +276,32 @@ public class VRSettings
     public boolean vrPhysicalKeyboard = true;
 
     /**
+     * Whether an ordinary text field taking focus brings a keyboard up by itself.
+     *
+     * <p>Off by default, as upstream has it: a screen full of fields would otherwise put a
+     * keyboard in front of the player every time one of them was touched. The chat line is
+     * exempt and always opens one, because it cannot lose focus and so is unambiguously the
+     * thing being typed into.
+     */
+    public boolean autoOpenKeyboard = false;
+
+    /**
+     * The characters on the in-world keyboard, and the same again with shift held.
+     *
+     * <p>Two flat strings sliced into thirteen columns, which is how upstream stores them and is
+     * what makes a layout something the player can edit rather than something the mod has to
+     * support. A longer string simply grows the board. The named sets in
+     * {@link lol.gzmc.vivecraftx.render.VRKeyboardLayout} are presets for these two fields and
+     * nothing more: whatever is in here is what the board shows, named or not.
+     *
+     * <p>Filled in from the game's own language before the defaults are taken, so the preset
+     * chosen for a player who has never touched the setting is the one for the language they are
+     * already reading -- and so that the Defaults button restores that rather than a null.
+     */
+    public String keyboardKeys;
+    public String keyboardKeysShift;
+
+    /**
      * What each slot of the radial menu does, by the name of the key binding it presses.
      *
      * <p>Names rather than bindings, because the bindings a game has depend on which mods are
@@ -423,6 +450,14 @@ public class VRSettings
     	mc = minecraft;
     	inst = this;
 
+        // Before the defaults are taken, so that the keyboard the player gets on a fresh install
+        // is in the language they are already playing in, and so that the Defaults button has
+        // something real to restore.
+        VRKeyboardLayout startingLayout = VRKeyboardLayout.forLanguage(
+                minecraft.gameSettings == null ? null : minecraft.gameSettings.language);
+        this.keyboardKeys = startingLayout.keys;
+        this.keyboardKeysShift = startingLayout.shifted;
+
         // Store our class defaults to a member variable for later use
     	storeDefaults();
 
@@ -458,7 +493,12 @@ public class VRSettings
             {
                 try
                 {
-                    String[] optionTokens = var2.split(":");
+                    // Split once, not at every colon. The writer side has always done it this
+                    // way; the reader had not, so any setting whose value contained a colon was
+                    // silently truncated at the first one when it was read back. The keyboard
+                    // layouts are the first setting where that is fatal rather than merely
+                    // wrong -- a QWERTY grid has a colon key on it.
+                    String[] optionTokens = var2.split(":", 2);
 
                     if (optionTokens[0].equals("version"))
                     {
@@ -987,6 +1027,21 @@ public class VRSettings
                         this.vrPhysicalKeyboard=optionTokens[1].equals("true");
                     }
 
+                    if(optionTokens[0].equals("autoOpenKeyboard")){
+                        this.autoOpenKeyboard=optionTokens[1].equals("true");
+                    }
+
+                    // An empty grid would leave a board with no keys on it and no way back, so
+                    // a blank value keeps whatever the language picked rather than being taken
+                    // at its word.
+                    if(optionTokens[0].equals("keyboardKeys") && !optionTokens[1].isEmpty()){
+                        this.keyboardKeys=optionTokens[1];
+                    }
+
+                    if(optionTokens[0].equals("keyboardKeysShift") && !optionTokens[1].isEmpty()){
+                        this.keyboardKeysShift=optionTokens[1];
+                    }
+
                     if(optionTokens[0].equals("realisticOpening")){
                         this.realisticOpening=optionTokens[1].equals("true");
                     }
@@ -1371,6 +1426,10 @@ public class VRSettings
                 return var4 + onOff(this.realisticOpening);
             case PHYSICAL_KEYBOARD:
                 return var4 + tr(this.vrPhysicalKeyboard ? "vivecraftx.value.keyboard.inWorld" : "vivecraftx.value.keyboard.steamVr");
+            case AUTO_OPEN_KEYBOARD:
+                return var4 + onOff(this.autoOpenKeyboard);
+            case KEYBOARD_LAYOUT:
+                return var4 + VRKeyboardLayout.label(this.keyboardKeys, this.keyboardKeysShift);
             case CALIBRATE_HEIGHT:
                 return var2;
             case WALK_MULTIPLIER:
@@ -1718,6 +1777,14 @@ public class VRSettings
             case PHYSICAL_KEYBOARD:
                 vrPhysicalKeyboard = !vrPhysicalKeyboard;
                 break;
+            case AUTO_OPEN_KEYBOARD:
+                autoOpenKeyboard = !autoOpenKeyboard;
+                break;
+            case KEYBOARD_LAYOUT:
+                String[] nextLayout = VRKeyboardLayout.next(keyboardKeys, keyboardKeysShift);
+                keyboardKeys = nextLayout[0];
+                keyboardKeysShift = nextLayout[1];
+                break;
             case CALIBRATE_HEIGHT:
                 if(seated) {
                     MCOpenVR.resetPosition();
@@ -1967,7 +2034,7 @@ public class VRSettings
             var5.println("bcbOn:" + this.vrShowBlueCircleBuddy);
             var5.println("worldScale:" + this.vrWorldScale);
             var5.println("worldRotation:" + this.vrWorldRotation);
-            var5.println("worldRotationIncrement:" + this.vrWorldRotationIncrement);
+            var5.println("vrWorldRotationIncrement:" + this.vrWorldRotationIncrement);
             var5.println("vrFixedCamposX:" + this.vrFixedCamposX);
             var5.println("vrFixedCamposY:" + this.vrFixedCamposY);
             var5.println("vrFixedCamposZ:" + this.vrFixedCamposZ);
@@ -2009,6 +2076,9 @@ public class VRSettings
             var5.println("realisticDismount:" + this.realisticDismount);
             var5.println("realisticOpening:" + this.realisticOpening);
             var5.println("vrPhysicalKeyboard:" + this.vrPhysicalKeyboard);
+            var5.println("autoOpenKeyboard:" + this.autoOpenKeyboard);
+            var5.println("keyboardKeys:" + this.keyboardKeys);
+            var5.println("keyboardKeysShift:" + this.keyboardKeysShift);
             for (int i = 0; i < this.vrRadialActions.length; i++) {
                 var5.println("radialAction" + i + ":" + this.vrRadialActions[i]);
             }
@@ -2017,7 +2087,9 @@ public class VRSettings
 
             if (vrQuickCommands == null) vrQuickCommands = getQuickCommandsDefaults(); //defaults
             
-            for (int i = 0; i < 11 ; i++){
+            // Every slot, not the first eleven of twelve: the editor offers twelve and the radial
+            // menu shows twelve, so one of them was editable and then thrown away on save.
+            for (int i = 0; i < vrQuickCommands.length ; i++){
             	var5.println("QUICKCOMMAND_" + i + ":" + vrQuickCommands[i]);
             }
    
@@ -2102,6 +2174,8 @@ public class VRSettings
         REALISTIC_DISMOUNT("vivecraftx.option.realisticDismount", false, true),
         REALISTIC_OPENING("vivecraftx.option.realisticOpening", false, true),
         PHYSICAL_KEYBOARD("vivecraftx.option.physicalKeyboard", false, true),
+        AUTO_OPEN_KEYBOARD("vivecraftx.option.autoOpenKeyboard", false, true),
+        KEYBOARD_LAYOUT("vivecraftx.option.keyboardLayout", false, true),
         FOV_REDUCTION_MIN("vivecraftx.option.fovReductionMin", true, false),
         SMOOTH_TURN_SPEED("vivecraftx.option.smoothTurnSpeed", true, false),
         TELEPORT_UP_LIMIT("vivecraftx.option.teleportUpLimit", true, false),

@@ -31,6 +31,16 @@ public class HorseTracker {
     private static final double RAISE_FULL = 0.55D;
 
     private boolean wasRaised;
+
+    /**
+     * The highest the hand got while it was up.
+     *
+     * <p>Remembered rather than read on release, because by the time the gesture ends the hand is
+     * back down: measuring then gave a negative amount over the threshold every time, so every
+     * jump was the fifteen per cent floor and the gesture had no range at all.
+     */
+    private double peakRaise;
+
     private int urgeCooldown;
 
     public boolean isActive(EntityPlayerSP player) {
@@ -44,6 +54,7 @@ public class HorseTracker {
     public void doProcess(Minecraft minecraft, EntityPlayerSP player) {
         if (!isActive(player)) {
             this.wasRaised = false;
+            this.peakRaise = 0D;
             this.urgeCooldown = 0;
             return;
         }
@@ -56,12 +67,17 @@ public class HorseTracker {
         double raised = handAboveHead(player);
         if (raised > RAISE) {
             this.wasRaised = true;
+            this.peakRaise = Math.max(this.peakRaise, raised);
         } else if (this.wasRaised) {
             this.wasRaised = false;
-            double over = Math.min((raised - RAISE) / (RAISE_FULL - RAISE), 1.0D);
+            double over = Math.min((this.peakRaise - RAISE) / (RAISE_FULL - RAISE), 1.0D);
             int power = (int) (Math.max(over, 0.15D) * 100);
-            sendAction(player, 5, power);
-            sendAction(player, 6, 0);
+            this.peakRaise = 0D;
+            // Action six, which is the one the server reads a horse's jump charge from. Sent as
+            // five it was read as "stop sprinting": the charge was discarded and the player was
+            // un-sprinted server-side without their own client knowing, so every reins jump was
+            // the weakest possible hop and left the two sides disagreeing about sprinting.
+            sendAction(player, 6, power);
             MCOpenVR.triggerHapticPulse(ControllerType.RIGHT, 0.08F, 160F, 0.8F);
         }
 

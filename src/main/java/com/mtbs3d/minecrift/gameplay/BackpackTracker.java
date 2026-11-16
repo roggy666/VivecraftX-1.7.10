@@ -67,8 +67,12 @@ public class BackpackTracker {
 				if(!wasIn[c]){
 					if(player.inventory.currentItem != 0){
 						previousSlot = player.inventory.currentItem;
-						player.inventory.currentItem = 0;	
-					} else {
+						player.inventory.currentItem = 0;
+					} else if (previousSlot > 0 && previousSlot < 9) {
+						// Only if there is something to go back to. Reaching over your shoulder
+						// with slot one already selected -- which is where a new world starts you
+						// -- used to put the held slot at minus one, and the next tick of holding
+						// left-click indexes the hotbar array with it and takes the game down.
 						player.inventory.currentItem = previousSlot;
 						previousSlot = -1;
 					}

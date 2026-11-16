@@ -96,9 +96,15 @@ public class RowTracker {
             return 0D;
         }
         // Backwards in the player's own frame: the direction the hand went, against the way the
-        // head is facing.
+        // head is facing. The hand's movement comes straight off the tracker, so it is turned
+        // into the world by however far the play area has been rotated before being compared with
+        // a direction that already has been -- otherwise a snap turn of ninety degrees makes
+        // pulling back read as nothing and sideways arm movement drive the boat, and at a hundred
+        // and eighty the whole thing inverts and the recovery stroke is the one that pushes.
+        Vec3 inWorld = lol.gzmc.vivecraftx.util.Vec3Util.rotateYaw(moved,
+                VR.player().worldRotationRadians);
         Vec3 look = VR.roomScale().getHMDDir_World();
-        double along = moved.xCoord * look.xCoord + moved.zCoord * look.zCoord;
+        double along = inWorld.xCoord * look.xCoord + inWorld.zCoord * look.zCoord;
         return along < 0 ? -along : 0D;
     }
 }

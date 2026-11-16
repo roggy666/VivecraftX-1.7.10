@@ -109,9 +109,19 @@ public final class VRRenderer {
         leftEye = VRFramebuffer.wrapping("L Eye", eyeWidth, eyeHeight, texLeft);
         rightEye = VRFramebuffer.wrapping("R Eye", eyeWidth, eyeHeight, texRight);
 
-        int sceneW = (int) Math.ceil(eyeWidth * scale);
-        int sceneH = (int) Math.ceil(eyeHeight * scale);
+        // The setting is a multiple of the pixel count, not of each edge -- that is what the
+        // slider's own label means and what upstream does with it -- so it reaches a side length
+        // through a square root. Applied to both edges directly, a setting of 2 drew four times
+        // the pixels and a setting of 4 drew sixteen.
+        float edge = (float) Math.sqrt(scale);
+        int sceneW = (int) Math.ceil(eyeWidth * edge);
+        int sceneH = (int) Math.ceil(eyeHeight * edge);
         sceneBuffer = new VRFramebuffer("3D Render", sceneW, sceneH, true);
+        // Drawing at a higher resolution than the headset's own only buys anything if the extra
+        // pixels are averaged on the way down. Vanilla builds every framebuffer with nearest
+        // sampling, which throws three pixels in four away at a scale of two and leaves the image
+        // aliased after paying for it to be smooth.
+        sceneBuffer.setFramebufferFilter(GL11.GL_LINEAR);
 
         ViveCraftX.LOG.info("VR framebuffers ready: eye {}x{}, scene {}x{} (scale {})",
                 eyeWidth, eyeHeight, sceneW, sceneH, scale);

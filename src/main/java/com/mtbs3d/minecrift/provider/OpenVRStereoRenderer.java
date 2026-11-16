@@ -233,26 +233,33 @@ public class OpenVRStereoRenderer implements IStereoProvider
 				MCOpenVR.texType1, null,
 				JOpenVRLibrary.EVRSubmitFlags.EVRSubmitFlags_Submit_Default);
 
-		// DoNotHaveFocus just means the scene belongs to the dashboard or another app for now.
-		// It clears by itself, and upstream treating every non-zero code as fatal is what made a
-		// perfectly normal startup state kill VR for the session.
-		if (isTransient(lret) || isTransient(rret)) {
-			MCOpenVR.vrCompositor.PostPresentHandoff.apply();
-			return;
-		}
-
-		if(lret + rret > 0){
-			throw new RenderConfigException("Compositor Error","Texture submission error: Left/Right " + getCompostiorError(lret) + "/" + getCompostiorError(rret));		
+		// The two eyes are judged separately, and a real error on either one is reported even if
+		// the other came back with something harmless. Asking only whether *some* code was
+		// transient let a fatal code on one eye hide behind a benign one on the other, and the
+		// frame was then skipped in silence for the rest of the session.
+		if (isFatal(lret) || isFatal(rret)) {
+			throw new RenderConfigException("Compositor Error","Texture submission error: Left/Right " + getCompostiorError(lret) + "/" + getCompostiorError(rret));
 		}
 
 		MCOpenVR.vrCompositor.PostPresentHandoff.apply();
 	}
 
 	
-	/** Codes that clear on their own, so the frame is skipped rather than VR switched off. */
+	/**
+	 * Codes that clear on their own, so the frame goes up as it is rather than VR being switched
+	 * off. DoNotHaveFocus just means the scene belongs to the dashboard or another app for now, and
+	 * AlreadySubmitted that this eye went up once already. Both clear by themselves; upstream
+	 * treating every non-zero code as fatal is what made a perfectly normal startup state kill
+	 * VR for the session.
+	 */
 	private static boolean isTransient(int code) {
 		return code == EVRCompositorError.EVRCompositorError_VRCompositorError_DoNotHaveFocus
 				|| code == EVRCompositorError.EVRCompositorError_VRCompositorError_AlreadySubmitted;
+	}
+
+	private static boolean isFatal(int code) {
+		return code != EVRCompositorError.EVRCompositorError_VRCompositorError_None
+				&& !isTransient(code);
 	}
 
 	public static String getCompostiorError(int code){

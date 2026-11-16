@@ -245,7 +245,26 @@ public class MCOpenVR
 	private static int LEFT_CONTROLLER = 1;
 	private static int THIRD_CONTROLLER = 2;
 
+	/**
+	 * Where each controller is, as the runtime reports it. Only ever written from a pose that
+	 * actually arrived.
+	 */
 	private static Matrix4f[] controllerPose = new Matrix4f[3];
+
+	/**
+	 * The same thing moved to the controller's tip, which is the point a hand aims and reaches
+	 * from.
+	 *
+	 * <p>A separate array rather than the tip transform being folded into the one above, because
+	 * the one above is not rewritten on a frame the runtime had no pose to give -- a controller
+	 * out of the cameras' sight, asleep on a desk, or flat. Folding the tip in on every frame
+	 * then multiplied it into an already-tipped matrix, again and again: on a wand, whose tip is
+	 * a five-centimetre shift, the hand and everything aimed by it slid away at several metres a
+	 * second; on a controller whose tip is also turned, it span. Built fresh from the raw pose
+	 * each frame, a lost controller simply stays where it was last seen.
+	 */
+	private static Matrix4f[] controllerPoseTip = new Matrix4f[3];
+
 	private static Matrix4f[] controllerRotation = new Matrix4f[3];
 	private static Matrix4f[] handRotation = new Matrix4f[3];
 
@@ -483,6 +502,7 @@ public class MCOpenVR
 			}
 			touchpadSampleCount[c] = 0;
 			controllerPose[c] = new Matrix4f();
+			controllerPoseTip[c] = new Matrix4f();
 			controllerRotation[c] = new Matrix4f();
 			controllerDeviceIndex[c] = -1;
 			controllerTipTransform[c] = new Matrix4f();
@@ -1640,9 +1660,17 @@ initialized = true;
 		// runtime to enumerate devices and guess roles. It is the same question the action system
 		// already answers for buttons, and answering it the same way means a controller swapped
 		// between hands mid-session is simply reported in its new hand.
+		// Reversed hands has to move the poses as well, and this is the only place that can do
+		// it. The reversed binding profile swaps which physical controller the buttons come from,
+		// but it leaves the two hand poses bound to their own hands -- so the main hand's trigger
+		// was being read from the player's physical left while the item, the arm and the aim ray
+		// were still drawn at the physical right. You held the sword in one hand and pulled the
+		// trigger in the other. With both ends swapped a hand index means the same device all the
+		// way through, which is what the render side's own flip already assumes.
+		boolean reversed = VR.settings() != null && VR.settings().vrReverseHands;
 		if (inputInitialized) {
-			updateControllerPose(RIGHT_CONTROLLER, rightPoseHandle);
-			updateControllerPose(LEFT_CONTROLLER, leftPoseHandle);
+			updateControllerPose(RIGHT_CONTROLLER, reversed ? leftPoseHandle : rightPoseHandle);
+			updateControllerPose(LEFT_CONTROLLER, reversed ? rightPoseHandle : leftPoseHandle);
 		}
 
 		// The third "controller" is the mixed-reality camera, which is a tracker rather than a
@@ -1780,6 +1808,11 @@ initialized = true;
 	static void onGuiScreenChanged(GuiScreen previousScreen, GuiScreen newScreen)
 	{
 		KeyBinding.unPressAllKeys();
+		// Releasing the keys is not enough on its own: the button that closed the screen is very
+		// likely still physically held, and the next frame activates the in-game action set, where
+		// the same trigger means attack. Reported as a change from nothing to pressed, it swung at
+		// whatever happened to be in front of the player the instant they left a menu.
+		ignorePressesNextFrame();
 		KeyboardSimulator.robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
 		KeyboardSimulator.robot.mouseRelease(InputEvent.BUTTON2_DOWN_MASK);
 		KeyboardSimulator.robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK);
@@ -2034,30 +2067,31 @@ initialized = true;
 		handRotation[0].M[3][3] = 1.0F;	
 
 		if(VR.settings().seated){
-			controllerPose[0] = hmdPose.inverted().inverted();
-			controllerPose[1] = hmdPose.inverted().inverted();
+			// Seated play aims with the head, so both hands are reported at it.
+			OpenVRUtil.Matrix4fCopy(hmdPose, controllerPoseTip[0]);
+			OpenVRUtil.Matrix4fCopy(hmdPose, controllerPoseTip[1]);
 		} else	
-			controllerPose[0] = Matrix4f.multiply(controllerPose[0], controllerTipTransform[0]);
+			controllerPoseTip[0] = Matrix4f.multiply(controllerPose[0], controllerTipTransform[0]);
 
 		// grab controller position in tracker space, scaled to minecraft units
-		Vector3f controllerPos = OpenVRUtil.convertMatrix4ftoTranslationVector(controllerPose[0]);
+		Vector3f controllerPos = OpenVRUtil.convertMatrix4ftoTranslationVector(controllerPoseTip[0]);
 
 		aimSource[0] = Vec3.createVectorHelper(controllerPos.x, controllerPos.y, controllerPos.z);
 
 		controllerHistory[0].add(aimSource[0]);
 
 		// build matrix describing controller rotation
-		controllerRotation[0].M[0][0] = controllerPose[0].M[0][0];
-		controllerRotation[0].M[0][1] = controllerPose[0].M[0][1];
-		controllerRotation[0].M[0][2] = controllerPose[0].M[0][2];
+		controllerRotation[0].M[0][0] = controllerPoseTip[0].M[0][0];
+		controllerRotation[0].M[0][1] = controllerPoseTip[0].M[0][1];
+		controllerRotation[0].M[0][2] = controllerPoseTip[0].M[0][2];
 		controllerRotation[0].M[0][3] = 0.0F;
-		controllerRotation[0].M[1][0] = controllerPose[0].M[1][0];
-		controllerRotation[0].M[1][1] = controllerPose[0].M[1][1];
-		controllerRotation[0].M[1][2] = controllerPose[0].M[1][2];
+		controllerRotation[0].M[1][0] = controllerPoseTip[0].M[1][0];
+		controllerRotation[0].M[1][1] = controllerPoseTip[0].M[1][1];
+		controllerRotation[0].M[1][2] = controllerPoseTip[0].M[1][2];
 		controllerRotation[0].M[1][3] = 0.0F;
-		controllerRotation[0].M[2][0] = controllerPose[0].M[2][0];
-		controllerRotation[0].M[2][1] = controllerPose[0].M[2][1];
-		controllerRotation[0].M[2][2] = controllerPose[0].M[2][2];
+		controllerRotation[0].M[2][0] = controllerPoseTip[0].M[2][0];
+		controllerRotation[0].M[2][1] = controllerPoseTip[0].M[2][1];
+		controllerRotation[0].M[2][2] = controllerPoseTip[0].M[2][2];
 		controllerRotation[0].M[2][3] = 0.0F;
 		controllerRotation[0].M[3][0] = 0.0F;
 		controllerRotation[0].M[3][1] = 0.0F;
@@ -2147,27 +2181,27 @@ initialized = true;
 
 		// update off hand aim
 		if(!VR.settings().seated) 
-			controllerPose[1] = Matrix4f.multiply(controllerPose[1], controllerTipTransform[1]);
+			controllerPoseTip[1] = Matrix4f.multiply(controllerPose[1], controllerTipTransform[1]);
 
 		// update off hand aim
-		Vector3f leftControllerPos = OpenVRUtil.convertMatrix4ftoTranslationVector(controllerPose[1]);
+		Vector3f leftControllerPos = OpenVRUtil.convertMatrix4ftoTranslationVector(controllerPoseTip[1]);
 
 		aimSource[1] = Vec3.createVectorHelper(leftControllerPos.x, leftControllerPos.y, leftControllerPos.z);
 
 		controllerHistory[1].add(aimSource[1]);
 
 		// build matrix describing controller rotation
-		controllerRotation[1].M[0][0] = controllerPose[1].M[0][0];
-		controllerRotation[1].M[0][1] = controllerPose[1].M[0][1];
-		controllerRotation[1].M[0][2] = controllerPose[1].M[0][2];
+		controllerRotation[1].M[0][0] = controllerPoseTip[1].M[0][0];
+		controllerRotation[1].M[0][1] = controllerPoseTip[1].M[0][1];
+		controllerRotation[1].M[0][2] = controllerPoseTip[1].M[0][2];
 		controllerRotation[1].M[0][3] = 0.0F;
-		controllerRotation[1].M[1][0] = controllerPose[1].M[1][0];
-		controllerRotation[1].M[1][1] = controllerPose[1].M[1][1];
-		controllerRotation[1].M[1][2] = controllerPose[1].M[1][2];
+		controllerRotation[1].M[1][0] = controllerPoseTip[1].M[1][0];
+		controllerRotation[1].M[1][1] = controllerPoseTip[1].M[1][1];
+		controllerRotation[1].M[1][2] = controllerPoseTip[1].M[1][2];
 		controllerRotation[1].M[1][3] = 0.0F;
-		controllerRotation[1].M[2][0] = controllerPose[1].M[2][0];
-		controllerRotation[1].M[2][1] = controllerPose[1].M[2][1];
-		controllerRotation[1].M[2][2] = controllerPose[1].M[2][2];
+		controllerRotation[1].M[2][0] = controllerPoseTip[1].M[2][0];
+		controllerRotation[1].M[2][1] = controllerPoseTip[1].M[2][1];
+		controllerRotation[1].M[2][2] = controllerPoseTip[1].M[2][2];
 		controllerRotation[1].M[2][3] = 0.0F;
 		controllerRotation[1].M[3][0] = 0.0F;
 		controllerRotation[1].M[3][1] = 0.0F;
@@ -2613,8 +2647,20 @@ initialized = true;
 		hapticScheduler.queueHapticPulse(controller, durationSeconds, frequency, amplitude, 0);
 	}
 
+	/**
+	 * The older form, in microseconds and with no frequency to give: what the trackers that
+	 * predate the action system still call.
+	 *
+	 * <p>The frequency matters more than it looks. These pulses last between a quarter and three
+	 * milliseconds, so asking for one cycle per second means the motor is told to begin a
+	 * vibration whose first half-cycle is five hundred milliseconds long and then stopped --
+	 * which is nothing at all. A hundred and sixty hertz is what upstream passes here, and at
+	 * that rate even the shortest of these is half a cycle of real movement. Everything still on
+	 * this form was silently buzzing nothing: landing a hit, breaking a block, the whole bow
+	 * draw and release, grabbing a ladder, eating, the backpack, the touch hotbar.
+	 */
 	public static void triggerHapticPulse(ControllerType controller, int durationMicroseconds) {
-		triggerHapticPulse(controller, durationMicroseconds / 1000000F, 1F, 1F);
+		triggerHapticPulse(controller, durationMicroseconds / 1000000F, 160F, 1F);
 	}
 
 	public static HapticScheduler getHapticScheduler() {
@@ -2660,7 +2706,7 @@ initialized = true;
 	}
 
 	public static void triggerBindingHapticPulse(KeyBinding binding, int durationMicroseconds) {
-		triggerBindingHapticPulse(binding, durationMicroseconds / 1000000F, 1F, 1F);
+		triggerBindingHapticPulse(binding, durationMicroseconds / 1000000F, 160F, 1F);
 	}
 
 	// --- origins: which physical input drove an action, and therefore which hand ---
@@ -2966,8 +3012,12 @@ initialized = true;
 			throw new RuntimeException("Failed to write action manifest", e);
 		}
 
-		// The reversed profiles swap the hands at the source, so that everything downstream can
-		// stay ignorant of the setting.
+		// The reversed profiles swap the hands at the source -- but only the buttons and the
+		// sticks. Their pose and haptic bindings are identical to the ordinary ones, each tied to
+		// its own physical hand, so those two have to be swapped in code: see updateAim for the
+		// poses and getHapticHandle for the buzz. The device a handed button read is restricted to
+		// is swapped in code as well, in getControllerHandle, because it has to name the same
+		// physical controller the file has just bound that action to.
 		String rev = VR.settings() != null && VR.settings().vrReverseHands ? "_reversed" : "";
 		copyAsset("input/vive_defaults" + rev + ".json", "openvr/input/vive_defaults.json");
 		copyAsset("input/oculus_defaults" + rev + ".json", "openvr/input/oculus_defaults.json");

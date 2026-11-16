@@ -39,6 +39,16 @@ public final class VRFreeArm {
     /** How long the whole arm is, shoulder to hand, in blocks. */
     public static final double ARM_REACH = 0.62D;
 
+    /**
+     * Kept and refilled rather than allocated per piece, for the reason the rest of the render
+     * path gives: the matrix stack wants a direct buffer, and a direct buffer costs a native
+     * allocation plus a cleaner the garbage collector has to walk with the world stopped. Four
+     * of them a frame was enough to show up as a stutter. The one caller hands it straight to
+     * {@code glMultMatrix}, which copies it before returning.
+     */
+    private static final java.nio.FloatBuffer BASIS =
+            org.lwjgl.BufferUtils.createFloatBuffer(16);
+
     private final ModelRenderer upper;
     private final ModelRenderer lower;
 
@@ -135,13 +145,13 @@ public final class VRFreeArm {
         double zy = xz * yx - xx * yz;
         double zz = xx * yy - xy * yx;
 
-        java.nio.FloatBuffer basis = org.lwjgl.BufferUtils.createFloatBuffer(16);
-        basis.put(new float[] {
-                (float) xx, (float) xy, (float) xz, 0F,
-                (float) yx, (float) yy, (float) yz, 0F,
-                (float) zx, (float) zy, (float) zz, 0F,
-                0F, 0F, 0F, 1F});
-        basis.rewind();
+        java.nio.FloatBuffer basis = BASIS;
+        basis.clear();
+        basis.put((float) xx).put((float) xy).put((float) xz).put(0F);
+        basis.put((float) yx).put((float) yy).put((float) yz).put(0F);
+        basis.put((float) zx).put((float) zy).put((float) zz).put(0F);
+        basis.put(0F).put(0F).put(0F).put(1F);
+        basis.flip();
 
         GL11.glPushMatrix();
         GL11.glTranslated(from.xCoord - origin.xCoord, from.yCoord - origin.yCoord,

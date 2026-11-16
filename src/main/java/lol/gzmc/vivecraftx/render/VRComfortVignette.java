@@ -35,25 +35,31 @@ public final class VRComfortVignette {
 
     private static float amount;
 
-    public static void render(float partialTicks) {
+    /**
+     * Advances how far closed it is. Once per frame, before either eye.
+     *
+     * <p>Separated from drawing because it has to be: the draw happens once per eye, and easing
+     * there advanced the aperture twice as fast as intended and -- worse -- by a different amount
+     * for each eye, so the edge sat several degrees further in on the right than on the left
+     * through every acceleration. Two eyes disagreeing about where a dark edge is, in a feature
+     * whose whole purpose is to settle the stomach, is the one thing it must not do.
+     */
+    public static void update() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (!VRState.running() || mc.thePlayer == null || VR.settings() == null) {
+        if (!VRState.running() || mc.thePlayer == null || VR.settings() == null
+                || !VR.settings().useFOVReduction) {
             amount = 0;
             return;
         }
-        if (!VRCamera.isEyePass(VR.currentPass())) {
-            return;
-        }
-        if (!VR.settings().useFOVReduction) {
-            amount = 0;
-            return;
-        }
-
         // Eased, because the cure for a lurch is not another lurch: an edge that snapped shut the
         // instant the stick moved would be its own discomfort.
         float target = travelling(mc.thePlayer);
         amount += (target - amount) * EASE;
-        if (amount < 0.01F) {
+    }
+
+    public static void render() {
+        if (!VRState.running() || VR.settings() == null
+                || !VRCamera.isEyePass(VR.currentPass()) || amount < 0.01F) {
             return;
         }
 
@@ -111,6 +117,15 @@ public final class VRComfortVignette {
                 GL11.glDepthMask(false);
                 GL11.glEnable(GL11.GL_BLEND);
                 GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                // The soft edge is the whole feature, and two pieces of leftover state were
+                // destroying it. Flat shading -- which is what the world pass leaves behind --
+                // gives a quad the colour of its last corner alone, and the last corner of every
+                // quad in the band below is the opaque one, so the entire gradient came out
+                // solid black with a hard rim. The alpha test, left on at a tenth, then clipped
+                // the faintest tenth of the gradient that remained. Neither is in the block of
+                // state pushed above: GL_SHADE_MODEL belongs to the lighting group.
+                GL11.glShadeModel(GL11.GL_SMOOTH);
+                GL11.glDisable(GL11.GL_ALPHA_TEST);
 
                 // Where the clear circle ends and the darkening begins. Clip space runs from minus
                 // one to one, and the corners are further out than that, so a radius of one still
@@ -156,6 +171,8 @@ public final class VRComfortVignette {
                 GL11.glEnable(GL11.GL_DEPTH_TEST);
                 GL11.glEnable(GL11.GL_TEXTURE_2D);
                 GL11.glColor4f(1F, 1F, 1F, 1F);
+                // Not covered by the attribute block above, so it is put back by hand.
+                GL11.glShadeModel(GL11.GL_FLAT);
             } finally {
                 GL11.glMatrixMode(GL11.GL_MODELVIEW);
                 GL11.glPopMatrix();

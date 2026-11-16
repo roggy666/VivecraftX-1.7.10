@@ -100,9 +100,18 @@ public final class VRModelPose {
      */
     private static final float MAX_HEAD_LEAN = 0.6F;
 
-    /** Whether this is the pass that draws your own body in front of your own eyes. */
+    /**
+     * Whether this is the pass that draws your own body in front of your own eyes.
+     *
+     * <p>The inventory figure is excluded explicitly, because an eye pass covers the whole frame
+     * including the interface drawn at the end of it -- so without this the figure in the
+     * inventory would be treated as the body under your chin: drawn without a head, with an
+     * elbow grown in its arm, and with its hands emptied on the grounds that what they hold is
+     * already being drawn at a controller. It is a portrait, and a portrait has a head.
+     */
     public static boolean inWorld() {
-        return VRState.running() && VR.settings() != null && VR.settings().renderOwnBody
+        return !inventory && VRState.running() && VR.settings() != null
+                && VR.settings().renderOwnBody
                 && VRCamera.isEyePass(VR.currentPass())
                 && Minecraft.getMinecraft().gameSettings.thirdPersonView == 0;
     }
@@ -232,12 +241,18 @@ public final class VRModelPose {
     /**
      * Where each part of a model sits when nobody has moved it.
      *
-     * <p>One model object is shared by every player on screen, and the game only ever sets the
-     * angles of its parts, never their positions -- those are decided once when the model is
-     * built. So moving a shoulder for a player in VR moves it for the next player drawn with the
-     * same model too, and for every mob that borrows it, until the game is restarted. The
-     * original positions are kept here the first time a model is touched and put back before
-     * each use.
+     * <p>One model object is shared by every player on screen, and their positions are decided
+     * once when the model is built rather than per frame like their angles. So moving a shoulder
+     * for a player in VR moves it for the next player drawn with the same model too, and for
+     * every mob that borrows it, until the game is restarted. The original positions are kept
+     * here the first time a model is touched and put back before each use.
+     *
+     * <p>Only the components this class actually writes are kept, which is why the arms carry
+     * three and everything else two. The head's own Y is the exception that matters: the game
+     * does set that one every frame -- it is how a crouch tucks the head down -- so a value
+     * remembered from the first frame a model was seen and replayed thereafter would pin the
+     * head at whichever height it happened to be then, leaving a gap at the neck for the rest of
+     * the session.
      *
      * <p>Weakly, so a model belonging to a resource pack that has been reloaded away is not held
      * alive by this.
@@ -256,6 +271,9 @@ public final class VRModelPose {
         return MOVED;
     }
 
+    /** The two arms, the only parts whose height this class moves. */
+    private static final int FIRST_ARM = 3;
+
     private static void remember(ModelBiped model) {
         if (ORIGINALS.containsKey(model)) {
             return;
@@ -267,8 +285,10 @@ public final class VRModelPose {
                 continue;
             }
             saved[i * 3] = parts[i].rotationPointX;
-            saved[i * 3 + 1] = parts[i].rotationPointY;
             saved[i * 3 + 2] = parts[i].rotationPointZ;
+            if (i >= FIRST_ARM) {
+                saved[i * 3 + 1] = parts[i].rotationPointY;
+            }
         }
         ORIGINALS.put(model, saved);
     }
@@ -284,8 +304,10 @@ public final class VRModelPose {
                 continue;
             }
             parts[i].rotationPointX = saved[i * 3];
-            parts[i].rotationPointY = saved[i * 3 + 1];
             parts[i].rotationPointZ = saved[i * 3 + 2];
+            if (i >= FIRST_ARM) {
+                parts[i].rotationPointY = saved[i * 3 + 1];
+            }
         }
     }
 
@@ -311,8 +333,14 @@ public final class VRModelPose {
         Vec3 offSide = room.getCustomControllerVector(1, HAND_SIDE);
         // Our own figure is posed even when we are seated: it is the one case where the
         // controllers being on the desk is still worth showing, because it is us looking at it.
-        apply(model, origin, head, room.getHMDDir_World(), main, off, mainSide, offSide, 1F,
-                reversed, false);
+        //
+        // The world scale is the real one, not a flat one. Every position above already carries
+        // it -- the accessors scale the headset's own metres into blocks by it -- and the poser
+        // divides it back out to reach model units, so claiming one here multiplied every offset
+        // from the feet by the scale: at twice size both arms pointed straight up out of the
+        // shoulders, and below one they pointed into the ground.
+        apply(model, origin, head, room.getHMDDir_World(), main, off, mainSide, offSide,
+                VR.player() != null ? VR.player().worldScale : 1F, reversed, false);
     }
 
     /**

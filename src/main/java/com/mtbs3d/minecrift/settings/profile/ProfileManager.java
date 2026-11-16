@@ -53,10 +53,26 @@ public class ProfileManager
 
     static File vrProfileCfgFile = null;
 
-    static JSONObject jsonConfigRoot = null;
-    static JSONObject profiles = null;
+    /**
+     * Never null, from the first class load onwards. Everything below reaches into these without
+     * asking, and twenty-odd call sites each guarding against a half-loaded config would be
+     * twenty places to forget; an empty config behaves like a config file that was not there,
+     * which is the behaviour we want from one we could not read anyway.
+     */
+    static JSONObject jsonConfigRoot = emptyRoot();
+    static JSONObject profiles = jsonConfigRoot.getJSONObject(KEY_PROFILES);
 
     static boolean loaded = false;
+
+    private static JSONObject emptyRoot()
+    {
+        JSONObject root = new JSONObject();
+        JSONObject empty = new JSONObject();
+        empty.put(DEFAULT_PROFILE, new JSONObject());
+        root.put(KEY_SELECTED_PROFILE, DEFAULT_PROFILE);
+        root.put(KEY_PROFILES, empty);
+        return root;
+    }
 
     public static synchronized void init( File dataDir )
     {
@@ -72,8 +88,10 @@ public class ProfileManager
                 vrProfileCfgFile.createNewFile();
             }
 
-            // Read in json (may be empty)
-            FileReader fr = new FileReader(vrProfileCfgFile);
+            // Read in json (may be empty). Named encoding rather than the platform default:
+            // this file holds quick commands and profile names, which a player may well write in
+            // their own language, and the default on Windows cannot represent them.
+            Reader fr = new InputStreamReader(new FileInputStream(vrProfileCfgFile), "UTF-8");
             try {
                 JSONTokener jt = new JSONTokener(fr);
                 jsonConfigRoot = new JSONObject(jt);
@@ -113,6 +131,11 @@ public class ProfileManager
         } catch (Exception e) {
             System.out.println("FAILED to read VR profile settings!");
             e.printStackTrace();
+            // Back to empty rather than to whatever half-built state the failure left behind, so
+            // the game starts on defaults instead of on a config that is partly someone else's.
+            jsonConfigRoot = emptyRoot();
+            profiles = jsonConfigRoot.getJSONObject(KEY_PROFILES);
+            currentProfileName = DEFAULT_PROFILE;
             loaded = false;
         }
     }
@@ -273,19 +296,10 @@ public class ProfileManager
 
     public static synchronized Map<String, String> getProfileSet(String profile, String set)
     {
-        Map<String, String> settings = new HashMap<String, String>();
-        if (profiles.has(profile)) {
-            JSONObject theProfile = profiles.getJSONObject(profile);
-            if (theProfile.has(set)) {
-                JSONObject theSet = theProfile.getJSONObject(set);
-                Set<String> keys = theSet.keySet();
-                for (String key : keys) {
-                    String value = theSet.getString(key);
-                    settings.put(key, value);
-                }
-            }
+        if (!profiles.has(profile)) {
+            return new HashMap<String, String>();
         }
-        return settings;
+        return getProfileSet(profiles.getJSONObject(profile), set);
     }
 
     public static synchronized Map<String, String> getProfileSet(JSONObject theProfile, String set)
@@ -295,7 +309,11 @@ public class ProfileManager
             JSONObject theSet = theProfile.getJSONObject(set);
             Set<String> keys = theSet.keySet();
             for (String key : keys) {
-                String value = theSet.getString(key);
+                // Asking for a string and taking whatever is there, rather than demanding one:
+                // a value a player has hand-edited without quotes around it would otherwise throw
+                // from inside here, and the throw escapes past the per-line guard in VRSettings
+                // and silently resets every VR setting to its default.
+                String value = theSet.optString(key, "");
                 settings.put(key, value);
             }
         }
@@ -344,7 +362,7 @@ public class ProfileManager
     public static synchronized void save()
     {
         try {
-            FileWriter fw = new FileWriter(vrProfileCfgFile);
+            Writer fw = new OutputStreamWriter(new FileOutputStream(vrProfileCfgFile), "UTF-8");
             String s = jsonConfigRoot.toString(3);
             fw.write(s);
             fw.flush();

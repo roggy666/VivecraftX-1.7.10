@@ -76,6 +76,8 @@ vivecraftx.option.chatHaptics=Вибрация на чат
 vivecraftx.option.realisticDismount=Выход шагом
 vivecraftx.option.realisticOpening=Открывать толчком
 vivecraftx.option.physicalKeyboard=Клавиатура
+vivecraftx.option.keyboardLayout=Раскладка клавиатуры
+vivecraftx.option.autoOpenKeyboard=Открывать по полю
 vivecraftx.option.fovReductionMin=Сила сужения зрения
 vivecraftx.option.smoothTurnSpeed=Плавный поворот
 vivecraftx.option.teleportUpLimit=Телепорт вверх
@@ -242,6 +244,13 @@ vivecraftx.value.freemove.hmd=Шлем
 vivecraftx.value.freemove.runInPlace=Бег на месте
 vivecraftx.value.freemove.joypad=Стик/тачпад
 
+#  Клавиатура в мире: название раскладки, которое написано на клавише её переключения,
+#  и подсказка в пустом текстовом поле, пока клавиатуры нет.
+vivecraftx.keyboard.layout.en=QWERTY
+vivecraftx.keyboard.layout.ru=ЙЦУКЕН
+vivecraftx.keyboard.layout.custom=Своя
+vivecraftx.keyboard.clickToOpen=Нажмите для клавиатуры
+
 #  Заголовки экранов.
 vivecraftx.screen.vrSettings=Настройки VR
 vivecraftx.screen.locomotion=Настройки передвижения
@@ -363,6 +372,8 @@ vivecraftx.tooltip.hudScale=Относительный размер HUD в по�
 vivecraftx.tooltip.hudPitch=Сдвиг HUD по вертикали, в градусах.\n  Отрицательные значения - вниз,\n  положительные - вверх.
 vivecraftx.tooltip.hudYaw=Сдвиг HUD по горизонтали, в градусах.\n  Отрицательные значения - влево,\n  положительные - вправо.
 vivecraftx.tooltip.physicalKeyboard=Какая клавиатура появляется по запросу.\n  В МИРЕ: стоит перед вами, и вы нажимаете\n       её кончиками пальцев. Остаётся там,\n       где поставили, и работает, даже если\n       окно не в фокусе.\n  STEAMVR: своя клавиатура SteamVR, висит\n       поверх всего и выключена в режиме сидя.
+vivecraftx.tooltip.keyboardLayout=Какие символы показывает клавиатура в мире.\n  QWERTY: английская.\n  ЙЦУКЕН: русская.\n  СВОЯ: то, что лежит в keyboardKeys и\n       keyboardKeysShift в файле настроек.\n  Та же клавиша есть и на самой клавиатуре,\n  слева внизу, так что менять можно на ходу.
+vivecraftx.tooltip.autoOpenKeyboard=Открывать ли клавиатуру, когда в обычное\nтекстовое поле начинают печатать.\n  ВКЛ: любое поле, получившее фокус, откроет\n       её. Это и нужно строкам поиска и полям\n       других модов, в том числе не-экранам.\n  ВЫКЛ: сама открывается только строка чата,\n       остальное ждёт кнопку клавиатуры.
 vivecraftx.tooltip.hudWristOffset=Где на предплечье сидит HUD на запястье.\n  Больше - ближе к локтю, меньше - ближе\n  к кисти. Работает, только если HUD\n  закреплён на запястье.
 vivecraftx.tooltip.hudDistance=На каком расстоянии перед телом висит HUD.\n  Видимый размер HUD от этого не меняется.\n  Расстояние в метрах (но блоки его\n  не перекрывают).
 vivecraftx.tooltip.hudOcclusion=Перекрывают ли HUD объекты, которые ближе.\n  ВКЛ: HUD скрывается за близкими объектами\n       и в тесноте может пропасть совсем!\n  ВЫКЛ: HUD виден всегда. Может быть заметно,\n       что он не на своей глубине.

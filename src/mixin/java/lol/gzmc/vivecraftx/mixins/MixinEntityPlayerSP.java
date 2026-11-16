@@ -44,12 +44,22 @@ public abstract class MixinEntityPlayerSP implements IPlayerVRExt {
      *
      * <p>Placed straight after the player's own living update, where Vivecraft had it, because it
      * reads the position and motion that update just produced.
+     *
+     * <p>The call is named on {@code AbstractClientPlayer} rather than on {@code EntityPlayer},
+     * which is where the method is actually written. A {@code super} call carries the direct
+     * superclass as its owner whether or not that class declares the method, and an injection
+     * point compares the owner exactly -- so naming the declaring class matched nothing at all,
+     * silently, and every physical gesture in the mod was dead: walking about the room, jumping,
+     * climbing, rowing, the backpack, raising food to your mouth. Verified by disassembling the
+     * class rather than reasoned about, because this is precisely the kind of thing that reads
+     * correctly and is not.
      */
     @Inject(
             method = "onLivingUpdate",
             at = @At(value = "INVOKE",
-                     target = "Lnet/minecraft/entity/player/EntityPlayer;onLivingUpdate()V",
-                     shift = At.Shift.AFTER))
+                     target = "Lnet/minecraft/client/entity/AbstractClientPlayer;onLivingUpdate()V",
+                     shift = At.Shift.AFTER),
+            require = 1)
     private void vivecraftx$roomScaleTick(CallbackInfo ci) {
         if (!VRState.running() || VR.player() == null) {
             return;

@@ -152,8 +152,12 @@ public final class VRAim {
             double entityReach) {
         Entity pointed = null;
         Vec3 hitLocation = null;
+        // How far away the best candidate so far was hit. It starts at the furthest a hit could
+        // be and closes in, which is what makes this pick the nearest entity rather than the last
+        // one the world happened to list: a zombie at arm's length and a cow six blocks behind it
+        // both pass a fixed bound, so without narrowing it the cow wins and the zombie cannot be
+        // hit at all.
         double reach = maxReach;
-        double dist = 0;
 
         // Searched only as far as an entity could actually be picked at, which is the nearer of
         // the two bounds below and never the sixty-four blocks the crosshair trace may have
@@ -189,8 +193,8 @@ public final class VRAim {
                     reach = 0.0D;
                 }
             } else if (collision != null) {
-                dist = origin.distanceTo(collision.hitVec);
-                if (dist < maxReach || reach == 0.0D) {
+                double dist = origin.distanceTo(collision.hitVec);
+                if (dist < reach || reach == 0.0D) {
                     // The thing you are riding is not a target, or you could not interact with
                     // anything past it; Forge lets an entity opt back in.
                     boolean riding = entity == mc.renderViewEntity.ridingEntity;
@@ -202,6 +206,7 @@ public final class VRAim {
                     } else {
                         pointed = entity;
                         hitLocation = collision.hitVec;
+                        reach = dist;
                     }
                 }
             }
@@ -209,7 +214,7 @@ public final class VRAim {
 
         if (pointed != null && hitLocation != null) {
             crossVec = hitLocation;
-            if (dist < entityReach) {
+            if (reach < entityReach) {
                 mc.objectMouseOver = new MovingObjectPosition(pointed, hitLocation);
                 crossVec = mc.objectMouseOver.hitVec;
                 // only these two get the name plate and the interaction prompt

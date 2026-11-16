@@ -34,7 +34,7 @@ public final class VRBodyMarker {
     /** At this far, it is as visible as it gets. */
     private static final double FULL = 0.9D;
 
-    public static void render(float partialTicks) {
+    public static void render() {
         Minecraft mc = Minecraft.getMinecraft();
         if (!VRState.running() || mc.thePlayer == null || VR.settings() == null
                 || !VR.settings().vrShowBlueCircleBuddy) {
@@ -51,8 +51,14 @@ public final class VRBodyMarker {
             return;
         }
 
-        double dx = head.xCoord - player.posX;
-        double dz = head.zCoord - player.posZ;
+        // Both ends of this measurement are taken at the same instant. The head comes from the
+        // headset, which is sampled per frame; the body therefore has to be the interpolated
+        // position the frame is drawn around, not the entity's own, which is a whole tick stale
+        // for most of every tick. Measured against the latter, the ring slid forward by the whole
+        // per-tick step and snapped back each tick -- a sawtooth under the player's feet while
+        // walking, and a flicker on and off wherever the lean sat near the threshold below.
+        double dx = head.xCoord - origin.xCoord;
+        double dz = head.zCoord - origin.zCoord;
         double lean = Math.sqrt(dx * dx + dz * dz);
         if (lean < QUIET) {
             return;
@@ -93,12 +99,21 @@ public final class VRBodyMarker {
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glDepthMask(false);
+            // The world pass leaves the alpha test on at a tenth, which is above where this ring
+            // starts: the whole first fifth of the fade-in would be submitted and thrown away,
+            // and the ring would appear abruptly at a tenth of its opacity instead of growing
+            // into it.
+            GL11.glDisable(GL11.GL_ALPHA_TEST);
 
-            // Just above the feet, so it lies on whatever the player is standing on rather than
-            // inside it.
-            double x = player.posX - origin.xCoord;
-            double y = player.boundingBox.minY - origin.yCoord + 0.015D;
-            double z = player.posZ - origin.zCoord;
+            // The ring belongs at the body, which is what the frame is already drawn around, so
+            // it sits at the origin in both horizontal axes. Just above the feet vertically, so
+            // it lies on whatever the player is standing on rather than inside it -- and the
+            // height of the feet is taken as a shape, the gap between the entity's own origin and
+            // the bottom of its box, so that it can be added to the interpolated origin without
+            // dragging the stale position in with it.
+            double x = 0D;
+            double y = player.boundingBox.minY - player.posY + 0.015D;
+            double z = 0D;
 
             Tessellator tes = Tessellator.instance;
             tes.startDrawingQuads();

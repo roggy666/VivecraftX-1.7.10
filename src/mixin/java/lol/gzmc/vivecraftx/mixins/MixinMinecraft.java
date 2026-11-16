@@ -38,8 +38,15 @@ import org.spongepowered.asm.mixin.Unique;
  * <p>Kept to one mixin class on purpose. Angelica already has fourteen on {@code Minecraft}, and
  * that overlap is worth spending on real hooks rather than on field storage, which is why the VR
  * state lives in {@code VR} rather than in {@code @Unique} fields here.
+ *
+ * <p>Raised above the default priority because the stereo redirect below has to displace
+ * Angelica's redirect of the same instruction, and a redirect only displaces another when it
+ * outranks it: at equal rank the one that arrives second is dropped with nothing but a warning,
+ * and which one that is depends on the order the configs happened to be prepared in. Losing that
+ * coin toss means the game renders flat. Everything Angelica's redirect did is reproduced in
+ * ours, so winning it deliberately costs nothing.
  */
-@Mixin(Minecraft.class)
+@Mixin(value = Minecraft.class, priority = 1500)
 public class MixinMinecraft implements IMinecraftExt {
 
     /**
@@ -103,7 +110,8 @@ public class MixinMinecraft implements IMinecraftExt {
      * behaviour is vanilla.
      *
      * <p>Angelica redirects this same call to guard the frame, and only one redirect of a call can
-     * win, so ours displaces it and inherits what it did: posting Angelica's own per-frame event,
+     * win, so ours outranks it (see the class above) and inherits what it did: posting its own
+     * per-frame event,
      * which several of its subsystems listen for, and honouring its frame limiter. The window-size
      * check is reproduced directly rather than reflectively, because skipping a frame while the
      * window is iconified is right for us too -- the eye buffers are not the window, but the
@@ -145,8 +153,15 @@ public class MixinMinecraft implements IMinecraftExt {
      * Something then has to perform them, once a tick, and without it every release is scheduled
      * and never happens: attack stays held, and a binding can be pressed exactly once ever,
      * because the press is refused while the previous one is still notionally down.
+     *
+     * <p>At the end of the tick rather than the start, which is where upstream puts it and which
+     * matters at headset frame rates. Most frames carry no tick, so a press and the release that
+     * follows it a frame or two later often both arrive before the next tick -- and draining at
+     * the start of that tick cancelled the press before the body of the tick had looked at it.
+     * Any trigger pull shorter than a fiftieth of a second was swallowed whole: no swing, no
+     * block placed, no mining begun.
      */
-    @Inject(method = "runTick", at = @At("HEAD"))
+    @Inject(method = "runTick", at = @At("RETURN"))
     private void vivecraftx$drainQueuedReleases(CallbackInfo ci) {
         if (!VRState.running()) {
             return;

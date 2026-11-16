@@ -129,6 +129,14 @@ public final class VRFrame {
             player.updateTeleportDestinations(mc, mc.renderViewEntity);
         }
 
+        // How far the comfort aperture has closed, once for the frame rather than once per eye,
+        // so both eyes are drawn with the same answer.
+        lol.gzmc.vivecraftx.render.VRComfortVignette.update();
+
+        // Lets the camera settle its far clip once for the frame instead of on each of the twenty
+        // or so times something asks it for a projection.
+        lol.gzmc.vivecraftx.render.VRCamera.beginFrame();
+
         // After the game has placed its own listener on the body, move it onto the head.
         VRListener.update();
 

@@ -65,7 +65,11 @@ public final class VRArmBones {
             float shrink) {
         ModelRenderer part = new ModelRenderer(model, ARM_U, v);
         part.mirror = left;
-        part.addBox(-3.0F, -2.0F, -2.0F, 4, length, 4, shrink);
+        // The two arms hang from pivots at -5 and +5 but are built on opposite sides of them, so
+        // that each box ends up outboard of the torso rather than overlapping it. Mirroring does
+        // not do this for us: it swaps the box's two X faces, which leaves a box built at -3
+        // still spanning -3 to +1. Vanilla's own arms are built at -3 and -1 for the same reason.
+        part.addBox(left ? -1.0F : -3.0F, -2.0F, -2.0F, 4, length, 4, shrink);
         part.setRotationPoint(left ? 5.0F : -5.0F, 2.0F, 0.0F);
         return part;
     }

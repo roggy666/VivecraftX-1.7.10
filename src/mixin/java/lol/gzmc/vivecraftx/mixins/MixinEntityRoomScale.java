@@ -111,7 +111,15 @@ public abstract class MixinEntityRoomScale {
         OpenVRPlayer.get().snapRoomOriginToPlayerEntity(player, true, false, 1);
 
         if (!VanillaExt.isInitFromServer(player)) {
-            player.setLocationAndAngles(x, y, z, yaw, pitch);
+            // The height is lowered by the eye offset on the way in, because the two methods
+            // disagree about what their y means: the one we are standing at the end of takes it
+            // as the entity's own origin, and the one called here adds the eye offset to whatever
+            // it is given. Handing it this method's y unchanged therefore placed the player a
+            // metre and a half above where the server had just put them -- on every join, every
+            // respawn and every dimension change -- and the position reply that goes out two
+            // lines later then failed the server's own "did you end up where I said" test, so it
+            // ignored the player's movement until they had finished falling back down.
+            player.setLocationAndAngles(x, y - (double) player.yOffset, z, yaw, pitch);
             VRRenderState.interpolatedPlayerPos = Vec3.createVectorHelper(x, y, z);
             VanillaExt.setInitFromServer(player, true);
         }
@@ -209,6 +217,16 @@ public abstract class MixinEntityRoomScale {
             Operation<Void> original) {
         if (!vivecraftx$isVrPlayer() || VR.settings() == null) {
             original.call(strafe, forward, friction);
+            return;
+        }
+        // On teleport locomotion the stick does not drive the body at all, and both references
+        // open this method by saying so. Without it, aiming a teleport -- which is done by
+        // pushing the stick, and so sets the same movement input -- quietly accumulated momentum
+        // the whole time: walking about your own room then did nothing for the few ticks that
+        // momentum took to decay after every single aim, because the room-scale mover stands
+        // down while the entity is still sliding, and auto-sprint came on for a player who was
+        // not moving.
+        if (!VR.player().getFreeMoveMode()) {
             return;
         }
         float magnitude = strafe * strafe + forward * forward;

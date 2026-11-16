@@ -35,6 +35,23 @@ public final class VRCamera {
     public static final float MIN_CLIP = 0.05F;
 
     private static final FloatBuffer[] EYE_PROJECTION = new FloatBuffer[2];
+
+    /**
+     * The storage the two entries above point at when they are valid.
+     *
+     * <p>Kept apart from them because null in {@code EYE_PROJECTION} is how "no projection yet"
+     * is said, and these have to survive that being said. Direct buffers, so allocating a pair
+     * per rebuild was a native allocation and a cleaner per rebuild; the matrix is copied into
+     * the stack by {@code glLoadMatrix} before anything else can touch it.
+     */
+    private static final FloatBuffer[] SCRATCH = new FloatBuffer[2];
+
+    private static FloatBuffer scratch(int index) {
+        if (SCRATCH[index] == null) {
+            SCRATCH[index] = org.lwjgl.BufferUtils.createFloatBuffer(16);
+        }
+        return SCRATCH[index];
+    }
     private static float cachedNear = -1F;
     private static float cachedFar = -1F;
 
@@ -77,6 +94,34 @@ public final class VRCamera {
 
     /** So a headset that cannot answer is not reported once per eye per frame for ever. */
     private static boolean loggedNoProjection;
+
+    /**
+     * The far clip for this frame, worked out once.
+     *
+     * <p>Asking Angelica for it is not free -- it walks its cloud layers and allocates to do it
+     * -- and the answer moves with the player's own altitude, so asking per call did not merely
+     * cost the walk: it made the projection cache below miss several times a second and rebuild
+     * two matrices from the headset each time. The far clip is a property of the frame, so it is
+     * settled once for the frame.
+     *
+     * <p>Resolved lazily rather than in {@link #beginFrame()}, because it reads the render
+     * distance that the first eye's {@code setup} is about to supply.
+     */
+    private static boolean farStale = true;
+    private static float farThisFrame = 256F;
+
+    /** Called once per frame, before either eye. */
+    public static void beginFrame() {
+        farStale = true;
+    }
+
+    private static float farClip() {
+        if (farStale) {
+            farThisFrame = AngelicaRenderCompat.farPlane(lastFarPlane * 2.0F);
+            farStale = false;
+        }
+        return farThisFrame;
+    }
 
     /** True when this pass is an actual eye, as opposed to the desktop mirror. */
     public static boolean isEyePass(RenderPass pass) {
@@ -168,7 +213,7 @@ public final class VRCamera {
      * what makes the two images a stereo pair.
      */
     public static void applyCullingProjection() {
-        float far = AngelicaRenderCompat.farPlane(lastFarPlane * 2.0F);
+        float far = farClip();
         // Asked for in case nothing has yet, which is what fills in the four edges below.
         if (projectionFor(RenderPass.Left, far) == null) {
             return;
@@ -199,7 +244,7 @@ public final class VRCamera {
                     right = i == 0 ? r : Math.max(right, r);
                     bottom = i == 0 ? b : Math.min(bottom, b);
                     top = i == 0 ? t : Math.max(top, t);
-                    EYE_PROJECTION[i] = m.transposed().toFloatBuffer();
+                    EYE_PROJECTION[i] = m.transposed().intoFloatBuffer(scratch(i));
                 }
                 cullLeft = left * CULL_MARGIN;
                 cullRight = right * CULL_MARGIN;
@@ -236,7 +281,7 @@ public final class VRCamera {
      * the method it did that in, so we owe it the same adjustment.
      */
     private static FloatBuffer currentProjection(RenderPass pass) {
-        return projectionFor(pass, AngelicaRenderCompat.farPlane(lastFarPlane * 2.0F));
+        return projectionFor(pass, farClip());
     }
 
     /**

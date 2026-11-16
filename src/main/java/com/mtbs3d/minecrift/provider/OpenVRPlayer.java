@@ -661,17 +661,13 @@ public class OpenVRPlayer implements IRoomscaleAdapter
                 VanillaExt.suppressNextMoveUpdate();
             }
 
+            // Charges the hunger and the teleport energy, among other things. The same block used
+            // to follow this call inline as well, so a jump the arc had allowed at four energy a
+            // block cost eight: one long teleport emptied the bar, the arc collapsed, and the
+            // player could not teleport again for several seconds while hunger drained twice as
+            // fast as it should.
             doTeleportCallback(); //callback unreliable if not vanilla, so just do it and assume.
 
-            if(VR.settings().vrLimitedSurvivalTeleport){
-              player.addExhaustion((float) (movementTeleportDistance / 16 * 1.2f));    
-              
-              if (!VR.player().getFreeMoveMode() && mc.playerController.isNotCreative() && VR.player().vrMovementStyle.arcAiming){
-              	teleportEnergy -= movementTeleportDistance * 4;	
-              }              
-            }
-            
-          //  System.out.println("teleport " + dest.toString());
             player.fallDistance = 0.0F;
 
             if (playTeleportSound)

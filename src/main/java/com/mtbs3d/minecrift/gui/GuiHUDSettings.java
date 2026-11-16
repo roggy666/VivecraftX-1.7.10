@@ -28,6 +28,8 @@ public class GuiHUDSettings extends BaseGuiSettings
             VRSettings.VrOptions.RENDER_MENU_BACKGROUND,
             VRSettings.VrOptions.TOUCH_HOTBAR,
             VRSettings.VrOptions.PHYSICAL_KEYBOARD,
+            VRSettings.VrOptions.KEYBOARD_LAYOUT,
+            VRSettings.VrOptions.AUTO_OPEN_KEYBOARD,
     };
 
     public GuiHUDSettings(GuiScreen guiScreen, VRSettings guivrSettings) {
@@ -165,6 +167,10 @@ public class GuiHUDSettings extends BaseGuiSettings
                 return tooltipLines("vivecraftx.tooltip.hudYaw");
             case PHYSICAL_KEYBOARD:
                 return tooltipLines("vivecraftx.tooltip.physicalKeyboard");
+            case KEYBOARD_LAYOUT:
+                return tooltipLines("vivecraftx.tooltip.keyboardLayout");
+            case AUTO_OPEN_KEYBOARD:
+                return tooltipLines("vivecraftx.tooltip.autoOpenKeyboard");
             case HUD_WRIST_OFFSET:
                 return tooltipLines("vivecraftx.tooltip.hudWristOffset");
             case HUD_DISTANCE:

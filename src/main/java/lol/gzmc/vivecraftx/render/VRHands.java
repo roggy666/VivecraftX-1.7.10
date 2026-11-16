@@ -133,16 +133,26 @@ public final class VRHands {
      * needs in order to understand what is happening to them.
      */
     public static void renderHandsAndOverlays(float partialTicks) {
-        render(partialTicks);
+        // An arm and a hand are the wrong shape for typing: the thing that touches a key first
+        // is a fist the size of three of them, and the point the keyboard actually tests is
+        // buried somewhere inside it. So while the board is up the arms come off entirely and
+        // each hand becomes one thin bar ending exactly at that point -- upstream makes the
+        // same swap, in the same place in the frame, and for the same reason. Either, never
+        // both: a finger growing out of a fist would be worse than either on its own.
+        if (VRKeyboard.isShowing()) {
+            VRKeyboard.renderFingers(partialTicks);
+        } else {
+            render(partialTicks);
+        }
         // The crosshair belongs here too, for the same reason the hands do: this is the last point
         // in the frame where the scene's own framebuffer and depth buffer are still bound.
         VRWorldCrosshair.render(partialTicks);
         VRTeleportArc.render(partialTicks);
-        VRBodyMarker.render(partialTicks);
+        VRBodyMarker.render();
         VRRadialMenu.render(partialTicks);
         VRKeyboard.render(partialTicks);
         renderFirstPersonOverlays(partialTicks);
-        VRComfortVignette.render(partialTicks);
+        VRComfortVignette.render();
     }
 
     /**
