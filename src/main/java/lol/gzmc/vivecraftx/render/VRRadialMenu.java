@@ -387,9 +387,20 @@ public final class VRRadialMenu {
                 a.xCoord * b.yCoord - a.yCoord * b.xCoord);
     }
 
-    /** The ring's orientation, as a matrix GL can be given. */
+    /**
+     * The ring's orientation, as a matrix GL can be given.
+     *
+     * <p>The buffer is kept and refilled rather than allocated here, for the same reason as
+     * everywhere else on the render path: it has to be a direct one, and a direct buffer costs a
+     * native allocation and a cleaner the garbage collector must walk with the world stopped. The
+     * one caller hands it straight to the matrix stack.
+     */
+    private static final java.nio.FloatBuffer FRAME =
+            org.lwjgl.BufferUtils.createFloatBuffer(16);
+
     private static java.nio.FloatBuffer frame() {
-        java.nio.FloatBuffer buffer = org.lwjgl.BufferUtils.createFloatBuffer(16);
+        java.nio.FloatBuffer buffer = FRAME;
+        buffer.clear();
         Vec3 normal = cross(right, up);
         buffer.put((float) right.xCoord).put((float) right.yCoord).put((float) right.zCoord)
                 .put(0F);

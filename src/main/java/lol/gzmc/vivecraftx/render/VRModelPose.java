@@ -75,6 +75,22 @@ public final class VRModelPose {
     private static final float ARM_LENGTH = 10F;
 
     /**
+     * The axis of a hand that says which way up it is being held.
+     *
+     * <p>A controller's own X axis, pointing out of the side of the grip. Where the hand is only
+     * fixes the line the arm lies along; it says nothing about how far the arm is twisted about
+     * that line, and a held item hangs off the arm bone, so the twist is what decides whether a
+     * sword comes out point-up or point-down. Any axis across the grip would pin it down; this is
+     * the one modern Vivecraft uses, and using the same one is what makes a held item come out
+     * the same way up here as it does there.
+     *
+     * <p>Negative rather than positive X, which is upstream's choice and not an arbitrary one:
+     * it is the axis that lines up with a model part's own positive X, so the two frames differ
+     * by a fixed quarter turn and nothing else.
+     */
+    private static final Vec3 HAND_SIDE = Vec3.createVectorHelper(-1, 0, 0);
+
+    /**
      * How far the head may be drawn from the body before it stops following.
      *
      * <p>Somebody leaning out from behind a wall is worth showing -- it is half of what people do
@@ -288,9 +304,15 @@ public final class VRModelPose {
             return;
         }
         boolean reversed = VR.settings() != null && VR.settings().vrReverseHands;
+        // The same world frame the positions above are in: this accessor turns the controller's
+        // own axis by the controller's rotation and then by the world rotation, which is exactly
+        // the pair of steps the sender applies before it puts a hand rotation on the wire.
+        Vec3 mainSide = room.getCustomControllerVector(0, HAND_SIDE);
+        Vec3 offSide = room.getCustomControllerVector(1, HAND_SIDE);
         // Our own figure is posed even when we are seated: it is the one case where the
         // controllers being on the desk is still worth showing, because it is us looking at it.
-        apply(model, origin, head, room.getHMDDir_World(), main, off, 1F, reversed, false);
+        apply(model, origin, head, room.getHMDDir_World(), main, off, mainSide, offSide, 1F,
+                reversed, false);
     }
 
     /**
@@ -310,7 +332,8 @@ public final class VRModelPose {
         }
         Vec3 look = forwardOf(pose.rotations[0]);
         float scale = pose.worldScale <= 0F ? 1F : pose.worldScale;
-        apply(model, origin, head, look, main, off, scale, pose.reversed, pose.seated);
+        apply(model, origin, head, look, main, off, sideOf(pose.rotations[1]),
+                sideOf(pose.rotations[2]), scale, pose.reversed, pose.seated);
     }
 
     /**
@@ -321,13 +344,20 @@ public final class VRModelPose {
      * which are offsets from somebody's feet.
      */
     private static void apply(ModelBiped model, Vec3 origin, Vec3 head, Vec3 look, Vec3 main,
-            Vec3 off, float worldScale, boolean reversed, boolean seated) {
+            Vec3 off, Vec3 mainSide, Vec3 offSide, float worldScale, boolean reversed,
+            boolean seated) {
         // Which hand is which. The input layer swaps the two for a left-handed player at the
         // source, so that everything on their own machine can stay ignorant of the setting --
         // but the swap happened there, and here we are drawing a body with a definite left and
         // right, so it has to be undone.
+        //
+        // The rotation travels with the position it belongs to and is not mirrored on the way:
+        // a left-handed player holds the same two physical controllers the same way round, and
+        // all the setting changed was which of them drives which arm.
         Vec3 right = reversed ? off : main;
         Vec3 left = reversed ? main : off;
+        Vec3 rightSide = reversed ? offSide : mainSide;
+        Vec3 leftSide = reversed ? mainSide : offSide;
         // Seated, the hands say nothing about which way the chest faces, so the head has to.
         float bodyYaw = seated ? yawOf(look) : bodyYaw(left, right, look);
 
@@ -355,11 +385,19 @@ public final class VRModelPose {
         lean(model.bipedHead, leanX, leanZ);
         lean(model.bipedHeadwear, leanX, leanZ);
         lean(model.bipedBody, leanX * 0.5F, leanZ * 0.5F);
+        // A shoulder is part of the chest, so it goes wherever the chest goes. Moving the body
+        // and leaving the arms behind opens a gap at the shoulder as wide as the lean -- a third
+        // of a block at the limit set above, which is most of the width of the body -- and a gap
+        // there does not read as a lean, it reads as the arm having come off. Modern Vivecraft
+        // places both arms from the body's own position rather than from the model's default for
+        // the same reason.
+        lean(model.bipedRightArm, leanX * 0.5F, leanZ * 0.5F);
+        lean(model.bipedLeftArm, leanX * 0.5F, leanZ * 0.5F);
 
         VRArmBones bones = BONES.get(model);
         VRArmBones use = bones != null && bones.active ? bones : null;
-        poseArm(model.bipedRightArm, -5F, right, origin, bodyYaw, worldScale, true, use);
-        poseArm(model.bipedLeftArm, 5F, left, origin, bodyYaw, worldScale, false, use);
+        poseArm(model.bipedRightArm, right, rightSide, origin, bodyYaw, worldScale, true, use);
+        poseArm(model.bipedLeftArm, left, leftSide, origin, bodyYaw, worldScale, false, use);
     }
 
     private static void lean(ModelRenderer part, float x, float z) {
@@ -442,6 +480,24 @@ public final class VRModelPose {
     }
 
     /**
+     * Where a sent rotation's side axis has ended up.
+     *
+     * <p>{@link #HAND_SIDE} turned by the rotation, which is the first column of the matrix the
+     * quaternion stands for, negated. The live path asks the runtime for the same vector and gets
+     * it by the same two steps, so the two agree without either having to know about the other.
+     */
+    private static Vec3 sideOf(float[] q) {
+        float w = q[0];
+        float x = q[1];
+        float y = q[2];
+        float z = q[3];
+        return Vec3.createVectorHelper(
+                -(1.0D - 2.0D * (y * y + z * z)),
+                -2.0D * (x * y + w * z),
+                -2.0D * (x * z - w * y));
+    }
+
+    /**
      * A point near the player, in the units and axes a model part is positioned in.
      *
      * <p>Model space counts sixteen to the block, points its Y downwards and its Z backwards, and
@@ -465,28 +521,56 @@ public final class VRModelPose {
     }
 
     /**
+     * A direction, in the axes a model part is rotated in.
+     *
+     * <p>The same change of frame as {@link #toModelSpace} with the two parts a direction does
+     * not have left out: no origin to measure from, and no scale, because turning a direction
+     * does not stretch it.
+     */
+    private static float[] toModelDir(Vec3 dir, float bodyYaw) {
+        double a = Math.toRadians(bodyYaw);
+        double cos = Math.cos(a);
+        double sin = Math.sin(a);
+        return new float[] {
+                (float) (dir.xCoord * cos + dir.zCoord * sin),
+                (float) (-dir.yCoord),
+                (float) (-(dir.zCoord * cos - dir.xCoord * sin))
+        };
+    }
+
+    /**
      * Points one arm at the controller it belongs to.
      *
-     * <p>A 1.7.10 arm is a single rigid box with no elbow, so it cannot both start at the
-     * shoulder and end at the hand unless it stretches. Modern Vivecraft stretches it -- slides
-     * the shoulder along towards the hand once the hand is further away than an arm is long --
-     * and so does this, because a hand that is not where the hand is defeats the point.
+     * <p>A 1.7.10 arm is a single rigid box with no elbow, so once the hand is further from the
+     * shoulder than the arm is long it cannot be in both places at once, and something has to
+     * give. What gives here is the hand: the arm stays on the shoulder and falls short.
      *
-     * @param shoulderX the model X of this arm, which is also which side of the body it is on
+     * <p>Modern Vivecraft's default gives up the shoulder instead -- {@code positionConnectedArm}
+     * slides the whole bone along towards the hand past ten units -- and that is where the arm
+     * looking torn off came from. It is a reasonable default there, where the player can see
+     * their own controller and a hand that does not reach it is a hand that lies. For somebody
+     * else's arms across the room it is the wrong trade: nobody watching can see where that
+     * player's controller really is, so falling an inch short of it costs nothing, while a hole
+     * at the shoulder is the first thing they notice. Upstream's own
+     * {@code playerLimbsLimit} option does exactly this, and this is that behaviour made the
+     * default rather than an option.
      */
-    private static void poseArm(ModelRenderer arm, float shoulderX, Vec3 controller, Vec3 origin,
+    private static void poseArm(ModelRenderer arm, Vec3 controller, Vec3 side, Vec3 origin,
             float bodyYaw, float worldScale, boolean right, VRArmBones use) {
         if (arm == null || controller == null) {
             return;
         }
         float[] hand = toModelSpace(controller, origin, bodyYaw, worldScale);
+        float[] roll = side == null ? null : toModelDir(side, bodyYaw);
 
-        // Where this arm hangs from on this model, which is not the same on every model.
-        shoulderX = arm.rotationPointX;
+        // Where this arm hangs from on this model, which is not the same on every model, and has
+        // already been moved sideways with the chest if the player is leaning.
+        float shoulderX = arm.rotationPointX;
         float shoulderY = arm.rotationPointY;
+        float shoulderZ = arm.rotationPointZ;
         float toX = hand[0] - shoulderX;
         float toY = hand[1] - shoulderY;
-        float toZ = hand[2];
+        float toZ = hand[2] - shoulderZ;
         float distance = MathHelper.sqrt_float(toX * toX + toY * toY + toZ * toZ);
         if (distance < 1.0E-4F) {
             return;
@@ -495,16 +579,15 @@ public final class VRModelPose {
         float ny = toY / distance;
         float nz = toZ / distance;
 
+        // An arm box starts two units above the point it turns about, so pointing it upwards --
+        // model Y runs downwards, hence the sign -- swings that stub out through the top of the
+        // shoulder. Lifting the joint by as much as is sticking out keeps it inside the body.
+        // Modern Vivecraft does this for the same reason and the two units are its number.
+        float raise = 2F * Math.max(0F, -ny);
+
         if (use == null) {
-            // One straight piece and nothing to bend: the best it can do is point at the hand
-            // and, past its own length, go and meet it.
-            if (distance > ARM_LENGTH) {
-                float reach = distance - ARM_LENGTH;
-                arm.rotationPointX += nx * reach;
-                arm.rotationPointY += ny * reach;
-                arm.rotationPointZ += nz * reach;
-            }
-            aim(arm, nx, ny, nz);
+            aim(arm, nx, ny, nz, roll);
+            arm.rotationPointY -= raise;
             return;
         }
 
@@ -514,7 +597,7 @@ public final class VRModelPose {
         // "down" that is square to the arm, so the elbow never tries to bend through it.
         float ex = (shoulderX + hand[0]) * 0.5F;
         float ey = (shoulderY + hand[1]) * 0.5F;
-        float ez = hand[2] * 0.5F;
+        float ez = (shoulderZ + hand[2]) * 0.5F;
         if (distance < ARM_LENGTH) {
             float slack = MathHelper.sqrt_float((ARM_LENGTH * ARM_LENGTH - distance * distance)
                     * 0.25F);
@@ -535,39 +618,76 @@ public final class VRModelPose {
         ModelRenderer lower = right ? use.rightLower : use.leftLower;
 
         upper.rotationPointX = arm.rotationPointX;
-        upper.rotationPointY = arm.rotationPointY;
+        upper.rotationPointY = arm.rotationPointY - raise;
         upper.rotationPointZ = arm.rotationPointZ;
-        aimAt(upper, ex - shoulderX, ey - shoulderY, ez);
+        // No roll for the upper arm: nothing tracks the shoulder, and the only honest answer for
+        // how far an upper arm is twisted is the one that twists it least.
+        aimAt(upper, ex - shoulderX, ey - shoulderY, ez - shoulderZ, null);
 
         lower.rotationPointX = ex;
         lower.rotationPointY = ey;
         lower.rotationPointZ = ez;
-        aimAt(lower, hand[0] - ex, hand[1] - ey, hand[2] - ez);
+        // The forearm is the piece the hand is on the end of, so its twist is the hand's.
+        aimAt(lower, hand[0] - ex, hand[1] - ey, hand[2] - ez, roll);
 
-        // The vanilla arm is hidden but still aimed, along the upper piece: the armour is its
-        // own model copying these angles, and a sleeve on an arm nobody aimed would hang where
-        // the arm used to be.
-        aim(arm, nx, ny, nz);
+        // The vanilla arm is hidden but still aimed, straight from the shoulder to the hand and
+        // with the hand's own roll. Two things read it even though nothing draws it: the armour,
+        // which is a model of the same kind posed the same way and would otherwise hang a sleeve
+        // where the arm used to be, and the held item, which the renderer places by walking out
+        // along this bone.
+        aim(arm, nx, ny, nz, roll);
+        arm.rotationPointY -= raise;
         arm.isHidden = true;
     }
 
-    private static void aimAt(ModelRenderer part, float dx, float dy, float dz) {
+    private static void aimAt(ModelRenderer part, float dx, float dy, float dz, float[] roll) {
         float len = MathHelper.sqrt_float(dx * dx + dy * dy + dz * dz);
         if (len < 1.0E-4F) {
             return;
         }
-        aim(part, dx / len, dy / len, dz / len);
+        aim(part, dx / len, dy / len, dz / len, roll);
     }
 
     /**
-     * Points a part along a direction.
+     * Points a part along a direction, and twists it to match the hand on the end of it.
      *
-     * <p>A limb hangs along the part's own +Y, and the game turns a part by Z, then Y, then X.
-     * Leaving Y at zero and using X for the forward swing and Z for the sideways one is both the
-     * shape vanilla animates in and the decomposition that twists the limb least, which matters
-     * because a skin is not symmetrical.
+     * <p>A limb hangs along the part's own +Y, so pointing it somewhere fixes where that axis
+     * goes and leaves the turn about it free -- and free means arbitrary, which is what put held
+     * items upside down. The part's own +X is what the twist is chosen to decide, and it is put
+     * on the hand's side axis with whatever of that axis lies along the limb taken out, because
+     * only the part across the limb can say anything about a twist about it.
+     *
+     * <p>Those two columns of the rotation give the third, and the three angles the game wants
+     * are read straight off it. The game turns a part by Z, then Y, then X -- 1.7.10 as three
+     * calls to {@code glRotatef} in that order, modern versions as a single
+     * {@code rotationZYX(zRot, yRot, xRot)} -- so these are the angles of that same product, and
+     * the extraction below is its exact inverse.
+     *
+     * <p>Without a side axis, or when the hand happens to be holding that axis along its own arm
+     * and so says nothing about the twist, this falls back to leaving Y at zero: the shape
+     * vanilla animates in, and the decomposition that twists the limb least.
      */
-    private static void aim(ModelRenderer part, float nx, float ny, float nz) {
+    private static void aim(ModelRenderer part, float nx, float ny, float nz, float[] roll) {
+        if (roll != null) {
+            float along = roll[0] * nx + roll[1] * ny + roll[2] * nz;
+            float ax = roll[0] - along * nx;
+            float ay = roll[1] - along * ny;
+            float az = roll[2] - along * nz;
+            float length = MathHelper.sqrt_float(ax * ax + ay * ay + az * az);
+            if (length > 1.0E-3F) {
+                ax /= length;
+                ay /= length;
+                az /= length;
+                // The third column is the cross product of the first two, and only its Z is
+                // wanted below, so only its Z is worked out.
+                float cz = ax * ny - ay * nx;
+                part.rotateAngleX = (float) Math.atan2(nz, cz);
+                part.rotateAngleY = (float) Math.atan2(-az,
+                        Math.sqrt((double) nz * nz + (double) cz * cz));
+                part.rotateAngleZ = (float) Math.atan2(ay, ax);
+                return;
+            }
+        }
         part.rotateAngleX = (float) Math.asin(clamp(nz));
         part.rotateAngleY = 0F;
         part.rotateAngleZ = (float) Math.atan2(-nx, ny);

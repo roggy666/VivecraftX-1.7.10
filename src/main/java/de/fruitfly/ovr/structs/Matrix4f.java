@@ -126,9 +126,29 @@ public class Matrix4f
                 Cofactor(0,3), Cofactor(1,3), Cofactor(2,3), Cofactor(3,3));
     }
 
-    public FloatBuffer toFloatBuffer() 
+    public FloatBuffer toFloatBuffer()
     {
-        FloatBuffer buf = BufferUtil.createFloatBuffer(16);
+        return intoFloatBuffer(BufferUtil.createFloatBuffer(16));
+    }
+
+    /**
+     * Writes this matrix into a buffer the caller already has, and hands the same one back.
+     *
+     * <p>Exists because the buffers this class hands out are direct ones, and a direct buffer is
+     * far more expensive than its sixty-four bytes suggest: each is a native allocation with a
+     * cleaner registered against it, so the memory is only given back when the garbage collector
+     * has got round to the buffer, and the collector has to walk every one of those cleaners
+     * while the world is stopped. A handful per frame is a thousand or more a second, which is
+     * enough on its own to turn a steady frame rate into an occasional long pause. Anything on
+     * the render path should therefore keep one buffer and refill it rather than ask for a new
+     * one, and this is how.
+     *
+     * <p>The buffer is left flipped and ready to read, exactly as {@link #toFloatBuffer} leaves
+     * the one it allocates.
+     */
+    public FloatBuffer intoFloatBuffer(FloatBuffer buf)
+    {
+        buf.clear();
 
         buf.put(M[0][0]);buf.put(M[0][1]);buf.put(M[0][2]);buf.put(M[0][3]);
         buf.put(M[1][0]);buf.put(M[1][1]);buf.put(M[1][2]);buf.put(M[1][3]);

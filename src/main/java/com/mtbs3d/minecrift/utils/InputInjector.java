@@ -25,7 +25,20 @@ public class InputInjector {
 	private static Class displayClass;
 	private static Class keyboardClass;
 	private static Class mouseClass;
-	
+
+	/**
+	 * The three field handles the lookups below go through, resolved once.
+	 *
+	 * <p>The values behind them do have to be read afresh every time, for the reason given where
+	 * that happens -- but the handles do not, and resolving them per call means a linear scan of
+	 * the declaring class's field table and a freshly copied Field object each time. This runs
+	 * once a frame for as long as any screen is open, since a pointer held in the hand is never
+	 * quite still, so it is worth not doing three times over for nothing.
+	 */
+	private static Field displayImplField;
+	private static Field keyboardField;
+	private static Field mouseField;
+
 	private static void checkSupported() {
 		if (!supportChecked) {
 			supported = LWJGLUtil.getPlatform() == LWJGLUtil.PLATFORM_WINDOWS || LWJGLUtil.getPlatform() == LWJGLUtil.PLATFORM_LINUX;
@@ -39,17 +52,9 @@ public class InputInjector {
 		checkSupported();
 		if (supported) { // They need to be loaded every time because apparently they can be recreated without warning
 			if (displayClass == null) loadClasses();
-			Object displayImpl = getFieldValue(Display.class, "display_impl", null);
-			switch (LWJGLUtil.getPlatform()) {
-				case LWJGLUtil.PLATFORM_WINDOWS:
-					keyboard = getFieldValue(displayClass, "keyboard", displayImpl);
-					mouse = getFieldValue(displayClass, "mouse", displayImpl);
-					break;
-				case LWJGLUtil.PLATFORM_LINUX:
-					keyboard = getFieldValue(displayClass, "keyboard", displayImpl);
-					mouse = getFieldValue(displayClass, "mouse", displayImpl);
-					break;
-			}
+			Object displayImpl = displayImplField.get(null);
+			keyboard = keyboardField.get(displayImpl);
+			mouse = mouseField.get(displayImpl);
 		}
 		return supported;
 	}
@@ -67,12 +72,17 @@ public class InputInjector {
 				mouseClass = Class.forName("org.lwjgl.opengl.LinuxMouse");
 				break;
 		}
+		// Both platforms keep the two devices on the display under the same names, so there is
+		// nothing to switch on here.
+		displayImplField = findField(Display.class, "display_impl");
+		keyboardField = findField(displayClass, "keyboard");
+		mouseField = findField(displayClass, "mouse");
 	}
-	
-	private static Object getFieldValue(Class clazz, String name, Object obj) throws ReflectiveOperationException {
+
+	private static Field findField(Class clazz, String name) throws ReflectiveOperationException {
 		Field field = clazz.getDeclaredField(name);
 		field.setAccessible(true);
-		return field.get(obj);
+		return field;
 	}
 	
 	private static void putMouseEventWithCoords(int button, boolean state, int coord1, int coord2, int dz, long nanos) throws ReflectiveOperationException {

@@ -103,7 +103,13 @@ public final class AngelicaRenderCompat {
             // produced -- a different frame's worth of visible chunks in each eye.
             Class<?> celeritas = Class.forName(
                     "com.gtnewhorizons.angelica.rendering.celeritas.CeleritasWorldRenderer");
-            celeritasInstance = celeritas.getMethod("getInstance");
+            // getInstanceOrNull rather than getInstance, which throws when the terrain renderer
+            // has not been built yet. The catch below is a kill switch -- it drops the handle so
+            // the failure is reported once rather than every frame -- and a throw from here would
+            // trip it over a frame that had no terrain to wait for in the first place, silently
+            // giving up the fix for the rest of the session. Changing dimensions tears the
+            // renderer down and puts us in exactly that frame.
+            celeritasInstance = celeritas.getMethod("getInstanceOrNull");
             renderSectionManager = celeritas.getMethod("getRenderSectionManager");
             finishGraphUpdates = renderSectionManager.getReturnType()
                     .getMethod("finishAllGraphUpdates");

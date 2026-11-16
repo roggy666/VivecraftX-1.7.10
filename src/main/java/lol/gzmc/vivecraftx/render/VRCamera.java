@@ -57,6 +57,19 @@ public final class VRCamera {
     /** A little beyond what either eye can see, so rounding cannot clip an edge chunk. */
     private static final float CULL_MARGIN = 1.05F;
 
+    /**
+     * The vertical field of view the two eyes together cover, in degrees.
+     *
+     * <p>Worked out once with the projections and then reported on both passes, rather than each
+     * eye reporting its own. Two reasons, and the second is the pressing one. A shader pack
+     * reading the value as a uniform wants one number for the frame, not two that differ by a
+     * fraction of a degree depending on which eye is being drawn. And Angelica re-walks its whole
+     * visibility graph whenever the number changes, so a left and a right that disagree -- which
+     * they do on any headset whose displays are canted rather than parallel -- buy a second full
+     * walk on the second eye pass, every frame, for a difference nobody can see.
+     */
+    private static float bothEyesFovDegrees = 70.0F;
+
     /** Remembered so the panel and the crosshair are drawn through the same lens as the scene. */
     private static float lastFarPlane = 128F;
     private static float lastPartialTicks;
@@ -98,7 +111,7 @@ public final class VRCamera {
         projection.rewind();
         GL11.glMultMatrix(projection);
 
-        AngelicaRenderCompat.reportFov(verticalFovDegrees(projection));
+        AngelicaRenderCompat.reportFov(bothEyesFovDegrees);
 
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
@@ -192,6 +205,12 @@ public final class VRCamera {
                 cullRight = right * CULL_MARGIN;
                 cullBottom = bottom * CULL_MARGIN;
                 cullTop = top * CULL_MARGIN;
+                // From the combined edges rather than the margined ones: the margin exists to
+                // keep rounding from clipping an edge chunk, and reporting an inflated angle to a
+                // shader pack would be a lie told for no reason.
+                bothEyesFovDegrees = top > bottom
+                        ? (float) Math.toDegrees(Math.atan(top) - Math.atan(bottom))
+                        : 70.0F;
                 cachedNear = MIN_CLIP;
                 cachedFar = farClip;
             } catch (Throwable t) {
@@ -202,6 +221,7 @@ public final class VRCamera {
                 }
                 EYE_PROJECTION[0] = null;
                 EYE_PROJECTION[1] = null;
+                bothEyesFovDegrees = 70.0F;
                 return null;
             }
             loggedNoProjection = false;
@@ -245,23 +265,6 @@ public final class VRCamera {
         }
         projection.rewind();
         GL11.glMultMatrix(projection);
-    }
-
-    /**
-     * The vertical field of view the projection implies.
-     *
-     * <p>A perspective matrix stores {@code 1 / tan(fovY / 2)} in element [1][1], so the angle
-     * comes back out of it. Angelica normally captures the value the setting produced; on an eye
-     * pass the lenses decide it instead, and this is what they decided.
-     */
-    private static float verticalFovDegrees(FloatBuffer projection) {
-        projection.rewind();
-        float m11 = projection.get(5); // column-major [1][1]
-        projection.rewind();
-        if (m11 <= 0.0F) {
-            return 70.0F;
-        }
-        return (float) Math.toDegrees(2.0D * Math.atan(1.0D / m11));
     }
 
     /** Drops the cached projections, so a clip distance change is picked up. */

@@ -9,6 +9,7 @@ import com.mtbs3d.minecrift.settings.VRSettings;
 import de.fruitfly.ovr.structs.Matrix4f;
 import de.fruitfly.ovr.structs.Quatf;
 import de.fruitfly.ovr.structs.Vector3f;
+import de.fruitfly.ovr.util.BufferUtil;
 
 import jopenvr.OpenVRUtil;
 
@@ -343,7 +344,7 @@ public final class VRGui {
         GL11.glTranslatef((float) (panelPos.x - eye.xCoord),
                 (float) (panelPos.y - eye.yCoord),
                 (float) (panelPos.z - eye.zCoord));
-        GL11.glMultMatrix(panelRot.transposed().toFloatBuffer());
+        GL11.glMultMatrix(panelRot.transposed().intoFloatBuffer(PANEL_ROTATION));
         GL11.glTranslatef((float) localOffset.xCoord, (float) localOffset.yCoord,
                 (float) localOffset.zCoord);
     }
@@ -367,6 +368,18 @@ public final class VRGui {
      * two things. Single threaded and read immediately by the only caller.
      */
     private static Matrix4f lastHudRotation = new Matrix4f();
+
+    /**
+     * The panel's orientation, in the form the graphics library takes it.
+     *
+     * <p>Kept and refilled rather than allocated where it is used, because that is once an eye and
+     * so a hundred and eighty times a second, and the buffer has to be a direct one -- which
+     * costs a native allocation and a cleaner the garbage collector must later walk with the
+     * world stopped, rather than the sixty-four bytes it looks like. It is handed straight to the
+     * matrix stack at the one place it is filled, so nothing can be holding the previous
+     * contents.
+     */
+    private static final FloatBuffer PANEL_ROTATION = BufferUtil.createFloatBuffer(16);
 
     /**
      * The panel's placement relative to the controller, as the last frame worked it out.

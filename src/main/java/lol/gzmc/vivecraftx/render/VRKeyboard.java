@@ -446,8 +446,21 @@ public final class VRKeyboard {
                 a.xCoord * b.yCoord - a.yCoord * b.xCoord);
     }
 
+    /**
+     * The keyboard's orientation, as a matrix the graphics library can be given.
+     *
+     * <p>The buffer is kept and refilled rather than allocated here. It has to be a direct one,
+     * and a direct buffer costs a native allocation and a cleaner the garbage collector must walk
+     * with the world stopped -- a poor thing to spend once an eye for every frame the keyboard is
+     * up. The one caller hands it straight to the matrix stack, so nothing is relying on what was
+     * in it before.
+     */
+    private static final java.nio.FloatBuffer FRAME =
+            org.lwjgl.BufferUtils.createFloatBuffer(16);
+
     private static java.nio.FloatBuffer frame() {
-        java.nio.FloatBuffer buffer = org.lwjgl.BufferUtils.createFloatBuffer(16);
+        java.nio.FloatBuffer buffer = FRAME;
+        buffer.clear();
         Vec3 normal = cross(right, up);
         buffer.put((float) right.xCoord).put((float) right.yCoord).put((float) right.zCoord)
                 .put(0F);

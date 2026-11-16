@@ -129,13 +129,19 @@ public abstract class MixinEntityRenderer implements IEntityRendererExt {
      * with its answer. Without this the first eye draws the previous frame's answer and the
      * second draws this one, and the chunks the two disagree about are precisely the ones at the
      * edge of vision.
+     *
+     * <p>The first eye only. Asking for the search clears the flag that says one is wanted, so by
+     * the time the second eye reaches this line there is nothing outstanding to wait for and the
+     * call can only cost. Should something contrive to ask for another search between the two
+     * eyes, that is a second full walk of the visibility graph to go and remove at its source,
+     * not a second stall to pay for here.
      */
     @Inject(method = "renderWorld", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
             target = "Lnet/minecraft/client/renderer/RenderGlobal;"
                      + "clipRenderersByFrustum(Lnet/minecraft/client/renderer/culling/ICamera;F)V"))
     private void vivecraftx$sameChunksInBothEyes(float partialTicks, long nanoTime,
             CallbackInfo ci) {
-        if (VRState.running() && VRCamera.isEyePass(VR.currentPass())) {
+        if (VRState.running() && VR.currentPass() == RenderPass.Left) {
             AngelicaRenderCompat.waitForChunkVisibility();
         }
     }

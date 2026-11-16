@@ -68,7 +68,13 @@ public final class BackhandCompat {
         try {
             return BackhandBridge.offhandItem(player);
         } catch (Throwable t) {
-            ViveCraftX.LOG.debug("Could not read the off-hand item", t);
+            // Said once and then not again. This is asked for on every eye of every frame, so a
+            // failure here is a failure a hundred and eighty times a second, and writing a stack
+            // trace that often from the render thread would cost far more than whatever went
+            // wrong. There is no handle to drop as there is elsewhere -- the call goes through a
+            // bridge class -- so saying it once is the whole of what can be done.
+            warnOnce("offhand-item", "Could not read the off-hand item; the second hand will "
+                    + "appear empty for the rest of the session.", t);
             return null;
         }
     }
@@ -99,7 +105,8 @@ public final class BackhandCompat {
         try {
             return BackhandBridge.withOffhand(player, action);
         } catch (Throwable t) {
-            ViveCraftX.LOG.debug("Acting with the off hand failed", t);
+            warnOnce("offhand-act", "Acting with the off hand failed; it will do nothing for "
+                    + "the rest of the session.", t);
             return false;
         }
     }
@@ -154,6 +161,19 @@ public final class BackhandCompat {
     }
 
     /**
+     * The same, for something that went wrong rather than something merely worth knowing.
+     *
+     * <p>At warn rather than debug, because a broken off hand is worth seeing, and once rather
+     * than every time, because the places this is called from run once or twice a frame and a
+     * repeating failure there would cost more in writing about itself than in anything else.
+     */
+    private static void warnOnce(String key, String message, Throwable cause) {
+        if (SAID.add(key)) {
+            ViveCraftX.LOG.warn(message, cause);
+        }
+    }
+
+    /**
      * Which hand the game's own swing is about to land on: zero for the main one, one for the
      * other.
      *
@@ -192,7 +212,8 @@ public final class BackhandCompat {
         try {
             BackhandBridge.swingOffhand(player);
         } catch (Throwable t) {
-            ViveCraftX.LOG.debug("Swinging the off hand failed", t);
+            warnOnce("offhand-swing", "Swinging the off hand failed; other players will not see "
+                    + "which hand acted.", t);
         }
     }
 }

@@ -185,6 +185,12 @@ public final class VRHands {
      */
     private static void renderHeldItem(Minecraft mc, float partialTicks, int controller,
             ItemStack held) {
+        // An empty hand is the commonest case of all, and saving a block of state in order to
+        // draw nothing with it is a cost paid for no reason, so this is settled before the save.
+        if (held == null || held.getItem() == null) {
+            return;
+        }
+
         // The item is tinted layer by layer, and a layer that throws leaves the tint behind:
         // the catch below swallows it, so the rest of this eye is drawn in whatever colour the
         // last layer wanted. Handing the state block to the driver is the same answer the
@@ -192,9 +198,6 @@ public final class VRHands {
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
                 | GL11.GL_CURRENT_BIT);
         try {
-            if (held == null || held.getItem() == null) {
-                return;
-            }
             Vec3 pos = VRRenderState.getControllerRenderPos(controller);
             FloatBuffer rotation = VR.roomScale().getControllerMatrix_World(controller);
             if (pos == null || rotation == null) {
@@ -245,18 +248,15 @@ public final class VRHands {
                         // and the side the game would keep is the side facing away. Drawing both
                         // costs a handful of triangles on something the size of a sword and is
                         // steadier than telling the driver which way round front has become.
-                        boolean culling = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+                        //
+                        // Nothing is read back or put back by hand: the push at the top of this
+                        // method already saved the enable bits, face culling among them, and the
+                        // pop at the bottom restores them whichever way this exits. Asking the
+                        // driver what the flag was is a round trip to answer a question already
+                        // answered.
                         GL11.glDisable(GL11.GL_CULL_FACE);
-                        try {
-                            drawItem(mc, held);
-                        } finally {
-                            if (culling) {
-                                GL11.glEnable(GL11.GL_CULL_FACE);
-                            }
-                        }
-                    } else {
-                        drawItem(mc, held);
                     }
+                    drawItem(mc, held);
                 }
             } catch (Throwable t) {
                 ViveCraftX.LOG.debug("The held item failed to draw", t);

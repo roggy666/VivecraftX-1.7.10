@@ -1641,11 +1641,35 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 	}
 	
 
+	/**
+	 * The buffers the three pose accessors below hand out, one for each answer they can give.
+	 *
+	 * <p>Reused rather than allocated per call. These are asked for several times an eye and so
+	 * more than a thousand times a second, and every one used to be a fresh direct buffer -- a
+	 * native allocation with a cleaner the garbage collector must then walk while the world is
+	 * stopped. That is a steady trickle of work that shows up as the occasional long pause
+	 * rather than as a slower frame, which is the worst way for a cost to present itself in a
+	 * headset.
+	 *
+	 * <p>Each accessor owns its own, and the controller ones are kept in pairs, so the contract
+	 * is the narrowest one that still removes the allocation: what an accessor returns stays
+	 * valid until that same accessor is asked for that same hand again. No caller holds one
+	 * across such a call -- they all multiply it into the matrix stack within a few lines -- and
+	 * a future one that wants to keep the figures must copy them out.
+	 */
+	private final FloatBuffer hmdMatrixWorldBuffer = BufferUtil.createFloatBuffer(16);
+	private final FloatBuffer[] controllerMatrixWorldBuffer = {
+		BufferUtil.createFloatBuffer(16), BufferUtil.createFloatBuffer(16)
+	};
+	private final FloatBuffer[] controllerMatrixWorldNormalBuffer = {
+		BufferUtil.createFloatBuffer(16), BufferUtil.createFloatBuffer(16)
+	};
+
 	@Override
 	public FloatBuffer getHMDMatrix_World() {
 		Matrix4f out = MCOpenVR.hmdRotation;
 		Matrix4f rot = Matrix4f.rotationY(worldRotationRadians);
-		return Matrix4f.multiply(rot, out).toFloatBuffer();
+		return Matrix4f.multiply(rot, out).intoFloatBuffer(hmdMatrixWorldBuffer);
 	}
 	
 	@Override //always interpolated
@@ -1679,13 +1703,17 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 	public FloatBuffer getControllerMatrix_World(int controller) {
 		Matrix4f out = MCOpenVR.getAimRotation(controller);
 		Matrix4f rot = Matrix4f.rotationY(worldRotationRadians);
-		return Matrix4f.multiply(rot,out).transposed().toFloatBuffer();
+		// Indexed the way getAimRotation itself collapses the argument, so that a buffer and the
+		// matrix that filled it can never come from different hands.
+		return Matrix4f.multiply(rot,out).transposed()
+			.intoFloatBuffer(controllerMatrixWorldBuffer[controller == 0 ? 0 : 1]);
 	}
 
 	public FloatBuffer getControllerMatrix_World_Normal(int controller) {
 		Matrix4f out = MCOpenVR.getAimRotation(controller);
 		Matrix4f rot = Matrix4f.rotationY(worldRotationRadians);
-		return Matrix4f.multiply(rot,out).toFloatBuffer();
+		return Matrix4f.multiply(rot,out)
+			.intoFloatBuffer(controllerMatrixWorldNormalBuffer[controller == 0 ? 0 : 1]);
 	}
 	
 	@Override
@@ -1778,42 +1806,74 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 		return out;
 	}
 	
+	/**
+	 * Finds the two fields on the player controller that say whether, and how soon, a block may
+	 * be struck again.
+	 *
+	 * <p>Looked for once and then never again, whether or not they were found. Which names exist
+	 * is decided by the mappings the game was built against, and those do not change while it is
+	 * running, so not finding them is a settled answer rather than something to keep asking.
+	 * Before this the search ran again on every call that found a null, and the swing that drives
+	 * those calls makes several per blow, so a rename anywhere underneath would have meant a
+	 * burst of failed lookups -- each printing to the console from the render thread -- for every
+	 * swing of every tool.
+	 */
 	private void hackPCMP(){
+		if (pcmpFieldsSearched) {
+			return;
+		}
+		pcmpFieldsSearched = true;
 
-	hitBlockDelay = Utils.getDeclaredField(Minecraft.getMinecraft().playerController.getClass(), 
-			"blockHitDelay", 
-			"i", 
+	hitBlockDelay = Utils.getDeclaredField(Minecraft.getMinecraft().playerController.getClass(),
+			"blockHitDelay",
+			"i",
 			"field_78781_i");
 
-	isHittingBlock = Utils.getDeclaredField(Minecraft.getMinecraft().playerController.getClass(), 
-			"isHittingBlock", 
-			"j", 
+	isHittingBlock = Utils.getDeclaredField(Minecraft.getMinecraft().playerController.getClass(),
+			"isHittingBlock",
+			"j",
 			"field_78778_j");
-	
+
 		if(hitBlockDelay!=null){
 			hitBlockDelay.setAccessible(true);
 		}
 		if(isHittingBlock!=null){
 			isHittingBlock.setAccessible(true);
 		}
+		if (hitBlockDelay == null || isHittingBlock == null) {
+			ViveCraftX.LOG.warn("The block-breaking fields on the player controller were not "
+					+ "found, so a swing will break blocks at the game's own pace rather than "
+					+ "the moment the tool lands");
+		}
 	}
 
 	public boolean getIsHittingBlock(){
-		boolean ret = false;
-		try {
-			ret =	isHittingBlock.getBoolean(Minecraft.getMinecraft().playerController);
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		if (isHittingBlock == null) {
+			// Asked for here as well as in clearBlockHitDelay, because this used to depend on
+			// that one having been called first and threw outright when it had not.
+			hackPCMP();
 		}
-		return ret;
-
+		if (isHittingBlock == null) {
+			return false;
+		}
+		try {
+			return isHittingBlock.getBoolean(Minecraft.getMinecraft().playerController);
+		} catch (Throwable t) {
+			// Reported once and then given up on, by dropping the handle. A field that cannot be
+			// read now will not start reading later, and this is called from the render thread
+			// several times per swing, so saying so every time would cost considerably more than
+			// the thing being reported.
+			ViveCraftX.LOG.warn("Could not read whether a block is being hit; swings will not "
+					+ "know when they have already landed", t);
+			isHittingBlock = null;
+			return false;
+		}
 	}
-	
+
 	Field hitBlockDelay, isHittingBlock;
+
+	/** Whether the two fields above have been looked for; see {@link #hackPCMP}. */
+	private boolean pcmpFieldsSearched;
 	public double lastTeleportArcDisplayOffset;
     //JRBUDDA: This is the only thing this file does, necessary? Use reflection to modify field directly from elsewhere?
     // VIVE START - function to allow damaging blocks immediately
@@ -1826,12 +1886,12 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 		if(hitBlockDelay !=null){
 			try {
 				hitBlockDelay.setInt(Minecraft.getMinecraft().playerController, 0);
-			} catch (IllegalArgumentException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IllegalAccessException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			} catch (Throwable t) {
+				// Reported once and then given up on, for the same reason as its neighbour: this
+				// runs several times per swing on the render thread.
+				ViveCraftX.LOG.warn("Could not clear the block hit delay; blocks will break at "
+						+ "the game's own pace rather than when the tool lands", t);
+				hitBlockDelay = null;
 			}
 		}
 	}

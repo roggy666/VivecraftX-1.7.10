@@ -12,6 +12,7 @@ import lol.gzmc.vivecraftx.VRRenderState;
 import lol.gzmc.vivecraftx.util.KeyBindingUtil;
 
 import lol.gzmc.vivecraftx.VR;
+import lol.gzmc.vivecraftx.VRAim;
 
 import lol.gzmc.vivecraftx.api.RenderPass;
 import lol.gzmc.vivecraftx.util.ChatUtil;
@@ -289,6 +290,31 @@ public class MCOpenVR
 	 * pose action there is a reliable moment to notice that changing.
 	 */
 	private static boolean tipTransformsStale = true;
+
+	/**
+	 * The soonest the tip transforms may be asked for again after a failure.
+	 *
+	 * <p>Nothing announces that a controller's model has become available, so a failure has to be
+	 * retried rather than waited on. But several of the reasons it fails do not clear at all while
+	 * the session lasts -- seated mode first among them, which reports incomplete by design -- and
+	 * every attempt costs a thirty-two kilobyte native buffer and a handful of calls into the
+	 * runtime. Asked once a second rather than once a frame, which picks a late controller up just
+	 * as surely and costs a ninetieth as much. A controller that is swapped for another re-arms
+	 * the staleness flag itself, so nothing here has to anticipate that.
+	 */
+	private static long tipTransformsRetryAt;
+
+	private static final long TIP_TRANSFORM_RETRY_NANOS = 1_000_000_000L;
+
+	/**
+	 * Scratch for the render model's name, reused.
+	 *
+	 * <p>Thirty-two kilobytes of native memory, which is a great deal to allocate and hand to the
+	 * collector for the sake of reading one string, and it was being allocated on every attempt.
+	 * Created on first use rather than with the class, because a session that never starts VR
+	 * should not pay for it at all.
+	 */
+	private static Pointer renderModelNameScratch;
 
 	// For mouse menu emulation
 	public static float controllerMouseX = -1.0f;
@@ -1631,8 +1657,13 @@ initialized = true;
 
 		if (tipTransformsStale) {
 			// Keeps trying while any controller has yet to answer, since nothing will tell us
-			// when its model becomes available.
-			tipTransformsStale = !getTipTransforms();
+			// when its model becomes available -- but at a walking pace rather than once a frame,
+			// because the commonest reason for failing is a setting that will not change back.
+			long now = System.nanoTime();
+			if (now - tipTransformsRetryAt >= 0L) {
+				tipTransformsRetryAt = now + TIP_TRANSFORM_RETRY_NANOS;
+				tipTransformsStale = !getTipTransforms();
+			}
 		}
 
 		updateAim();
@@ -1826,7 +1857,12 @@ initialized = true;
 					|| (newScreen instanceof GuiRepair)
 					;
 
-			if(appearOverBlock && mc.objectMouseOver !=null){	
+			// A miss has to be ruled out and not merely a null: the aim ray now reports one
+			// rather than nothing at all, and its block coordinates are wherever the ray ran out
+			// -- up to sixty-four blocks away in the sky. Opening a container is always a hit, so
+			// in practice this never fires on a miss; checking anyway, because the alternative
+			// failure is a crafting table's interface hanging in the air over the horizon.
+			if(appearOverBlock && !VRAim.hitNothing(mc.objectMouseOver)){
 
 				guiScale =(float) (Math.sqrt(VR.player().worldScale) * 2);
 				Vector3f guiPos_World =new Vector3f((float) mc.objectMouseOver.blockX + 0.5f,
@@ -2208,7 +2244,10 @@ initialized = true;
 			return false;
 		}
 		boolean complete = true;
-		Pointer modelName = new Memory(JOpenVRLibrary.k_unMaxPropertyStringSize);
+		if (renderModelNameScratch == null) {
+			renderModelNameScratch = new Memory(JOpenVRLibrary.k_unMaxPropertyStringSize);
+		}
+		Pointer modelName = renderModelNameScratch;
 
 		for (int i = 0; i < 2; i++) {
 			if (controllerDeviceIndex[i] == JOpenVRLibrary.k_unTrackedDeviceIndexInvalid

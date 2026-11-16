@@ -180,8 +180,10 @@ public final class VRWorldCrosshair {
             GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
 
             // Turned forty-five degrees when nothing was hit, which is how you can tell at a glance
-            // that you are aiming at open air rather than at something too far away.
-            if (mc.objectMouseOver == null) {
+            // that you are aiming at open air rather than at something too far away. Asked through
+            // the predicate because a miss is now reported as a miss rather than as nothing at
+            // all, and a bare null check would read every one of them as a hit.
+            if (VRAim.hitNothing(mc.objectMouseOver)) {
                 GL11.glRotatef(45, 0, 0, 1);
             }
 

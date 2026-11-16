@@ -45,6 +45,19 @@ public final class VRCursor {
      * while the panel's framebuffer is bound -- that is, from the end of drawing a screen.
      */
     public static void draw() {
+        // Decided before any state is saved, rather than after. Saving and restoring the block
+        // costs the same whether anything is drawn between or not, and the commonest answer here
+        // is that there is nothing to draw.
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.currentScreen == null || !VRState.running() || VR.settings() == null) {
+            return;
+        }
+        // Only once the ray has actually landed on the panel. Until then there is nothing
+        // meaningful to point at, and a pointer parked in a corner reads as a stuck cursor.
+        if (!MCOpenVR.controllerMouseValid) {
+            return;
+        }
+
         // Everything this turns off, it turns off for the rest of the eye unless it is put
         // back. Lighting is the one that shows: a later item drawn correctly comes out
         // unshaded, and reads as flat. Handing the whole block of state to the driver to
@@ -53,16 +66,6 @@ public final class VRCursor {
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
                 | GL11.GL_CURRENT_BIT);
         try {
-            Minecraft mc = Minecraft.getMinecraft();
-            if (mc.currentScreen == null || !VRState.running() || VR.settings() == null) {
-                return;
-            }
-            // Only once the ray has actually landed on the panel. Until then there is nothing
-            // meaningful to point at, and a pointer parked in a corner reads as a stuck cursor.
-            if (!MCOpenVR.controllerMouseValid) {
-                return;
-            }
-
             int x = Mouse.getX() * mc.currentScreen.width / Math.max(1, mc.displayWidth);
             int y = mc.currentScreen.height
                     - Mouse.getY() * mc.currentScreen.height / Math.max(1, mc.displayHeight) - 1;

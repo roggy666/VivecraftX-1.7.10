@@ -27,8 +27,12 @@ public interface IRoomscaleAdapter  {
 	public float getHMDYaw_World();  //degrees
 	public float getHMDPitch_World(); //degrees
 	
+	// The three below may hand back a buffer they keep and refill, because they are asked often
+	// enough that allocating one each time is a measurable cost in a headset. What one returns is
+	// good until that same method is asked for that same hand again; read it or copy it before
+	// then, and do not store it.
 	public FloatBuffer getHMDMatrix_World();
-	public FloatBuffer getHMDMatrix_Room();	
+	public FloatBuffer getHMDMatrix_Room();
 	public FloatBuffer getControllerMatrix_World(int controller);
 	
 	public Vec3 getEyePos_World(RenderPass currentPass);

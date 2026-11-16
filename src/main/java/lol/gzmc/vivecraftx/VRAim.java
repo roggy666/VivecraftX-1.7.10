@@ -14,6 +14,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItemFrame;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 
@@ -39,6 +40,19 @@ public final class VRAim {
 
     /** Where the aim ray ended this frame: the thing hit, or the far end of the trace. */
     public static Vec3 crossVec;
+
+    /**
+     * Whether an aim result amounts to having hit nothing.
+     *
+     * <p>Worth one name rather than the two-part condition written out wherever it is needed,
+     * because "nothing was hit" is two states and not one. This mod reports it as a miss, since
+     * that is what the rest of the game is built to expect; anything else may still leave the
+     * field null, and a reader that only checks for null would mistake a miss for a hit and go on
+     * to use the block coordinates a miss does not really have.
+     */
+    public static boolean hitNothing(MovingObjectPosition hit) {
+        return hit == null || hit.typeOfHit == MovingObjectPosition.MovingObjectType.MISS;
+    }
 
     /**
      * Replaces vanilla's pick with one from the controller.
@@ -79,20 +93,47 @@ public final class VRAim {
                 false, false, true);
 
         double maxReach;
-        if (mc.objectMouseOver == null
-                || mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.MISS) {
+        if (hitNothing(mc.objectMouseOver)) {
             // Nothing in reach, but the crosshair still has to land somewhere, so the trace is
             // repeated out to the crosshair's own range. Without this the crosshair would sit at
             // arm's length in mid-air whenever you are not pointing at anything.
+            //
+            // Plain this time, without the last-uncollidable flag the reach trace above needs.
+            // That flag reports the last block the ray passed through, and the position it gives
+            // for it is the start of the ray rather than the end -- so asking for it here put the
+            // crosshair back on the controller and left the reach at zero, which is precisely
+            // what the paragraph above says this trace exists to prevent. What is wanted is the
+            // surface of whatever distant block is in the way, or nothing at all, and nothing at
+            // all is then answered geometrically.
             Vec3 farEnd = origin.addVector(aim.xCoord * MAX_CROSSHAIR_DISTANCE,
                     aim.yCoord * MAX_CROSSHAIR_DISTANCE, aim.zCoord * MAX_CROSSHAIR_DISTANCE);
-            MovingObjectPosition far = mc.theWorld.func_147447_a(
-                    Vec3.createVectorHelper(origin.xCoord, origin.yCoord, origin.zCoord), farEnd,
-                    false, false, true);
-            crossVec = far != null ? far.hitVec
-                    : Vec3.createVectorHelper(farEnd.xCoord, farEnd.yCoord, farEnd.zCoord);
+            MovingObjectPosition far = mc.theWorld.rayTraceBlocks(
+                    Vec3.createVectorHelper(origin.xCoord, origin.yCoord, origin.zCoord), farEnd);
+            crossVec = hitNothing(far)
+                    ? Vec3.createVectorHelper(farEnd.xCoord, farEnd.yCoord, farEnd.zCoord)
+                    : far.hitVec;
             maxReach = crossVec.distanceTo(origin);
-            mc.objectMouseOver = null;
+
+            // A miss, rather than nothing at all. Two places in the game read this field without
+            // first asking whether there is a world to have hit something in, and both of them
+            // treat null as a condition that cannot arise: vanilla logs it, and Backhand, which
+            // takes the right-click handler over, logs it and then gives up on the click. Giving
+            // up there is what killed every use of an item aimed at open air -- eating, drawing a
+            // bow, throwing a snowball, filling a bucket -- because aiming at open air is exactly
+            // when this branch runs. A miss carries the same meaning without breaking either
+            // reader: both of them switch on the kind of hit, and neither has a case for a miss,
+            // so both fall through to the behaviour that was wanted all along. Minecrift could
+            // leave it null because it patched the two log sites out of the game; a mixin cannot,
+            // least of all the one Backhand has already overwritten.
+            //
+            // The side is -1 because that is what the game itself writes when a ray runs its full
+            // length, and the block is the one the far end landed in, so a reader that does look
+            // at them is at least not misled about where.
+            mc.objectMouseOver = new MovingObjectPosition(
+                    MathHelper.floor_double(crossVec.xCoord),
+                    MathHelper.floor_double(crossVec.yCoord),
+                    MathHelper.floor_double(crossVec.zCoord),
+                    -1, crossVec, false);
         } else {
             maxReach = mc.objectMouseOver.hitVec.distanceTo(origin);
             crossVec = mc.objectMouseOver.hitVec;
@@ -114,8 +155,17 @@ public final class VRAim {
         double reach = maxReach;
         double dist = 0;
 
+        // Searched only as far as an entity could actually be picked at, which is the nearer of
+        // the two bounds below and never the sixty-four blocks the crosshair trace may have
+        // reached. A box that size spans a hundred chunks, and the world has to walk every entity
+        // list in all of them, so the cost of this would swing by two orders of magnitude between
+        // pointing at a wall and pointing at the horizon -- a frame-time cliff controlled by
+        // nothing the player can see. Nothing past reach can be interacted with in any case: the
+        // test at the end of this method throws it out again.
+        double searchReach = Math.min(maxReach, entityReach);
         AxisAlignedBB search = AxisAlignedBB
-                .getBoundingBox(-maxReach, -maxReach, -maxReach, maxReach, maxReach, maxReach)
+                .getBoundingBox(-searchReach, -searchReach, -searchReach,
+                        searchReach, searchReach, searchReach)
                 .offset(origin.xCoord, origin.yCoord, origin.zCoord)
                 .expand(1, 1, 1);
 

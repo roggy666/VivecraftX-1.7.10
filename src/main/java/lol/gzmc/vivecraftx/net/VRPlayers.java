@@ -120,6 +120,11 @@ public final class VRPlayers {
     private static void blend(VRPose from, VRPose to, float t) {
         BLENDED.inVr = to.inVr;
         BLENDED.reversed = to.reversed;
+        // Seated has to come across with the rest of it. Left out, the blended pose always says
+        // standing, and a seated player's arms get posed from two controllers lying on a desk --
+        // which is the worst case of the arms leaving the body, because a desk is nowhere near
+        // where a shoulder is.
+        BLENDED.seated = to.seated;
         BLENDED.worldScale = from.worldScale + (to.worldScale - from.worldScale) * t;
         for (int i = 0; i < 3; i++) {
             Vec3 a = from.positions[i];
