@@ -63,6 +63,8 @@ public class ViveCraftX {
         lol.gzmc.vivecraftx.net.VRServerConfig.load(event.getSuggestedConfigurationFile());
         FMLCommonHandler.instance().bus().register(
                 new lol.gzmc.vivecraftx.net.VRServerTeleports.Ticker());
+        FMLCommonHandler.instance().bus().register(
+                new lol.gzmc.vivecraftx.net.VRPoseRelay.Ticker());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
                 new lol.gzmc.vivecraftx.net.VRServerGreeting());
     }

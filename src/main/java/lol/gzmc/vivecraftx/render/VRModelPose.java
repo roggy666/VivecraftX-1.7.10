@@ -136,15 +136,61 @@ public final class VRModelPose {
         if (look == null) {
             return null;
         }
-        if (VR.settings() != null && VR.settings().seated) {
-            return yawOf(look);
-        }
+        boolean seated = VR.settings() != null && VR.settings().seated;
         Vec3 main = room.getControllerPos_World(0);
         Vec3 off = room.getControllerPos_World(1);
-        if (main == null || off == null) {
+        if (seated || main == null || off == null) {
             return yawOf(look);
         }
         boolean reversed = VR.settings() != null && VR.settings().vrReverseHands;
+        return Float.valueOf(chestYaw(look, main, off, reversed, false));
+    }
+
+    /**
+     * Which way this player's chest faces, or null if we have nothing to say about them.
+     *
+     * <p>The same question as {@link #selfBodyYaw()} and for the same reason, asked about anybody
+     * -- because the disagreement that method exists to prevent is not peculiar to oneself. A
+     * player in a headset has their yaw written from a controller, and the renderer turns their
+     * whole model by it before the model poses itself; so for everybody else on screen the torso
+     * was facing one way while their arms had been placed in a frame facing another, and the
+     * hands sat rotated about the spine. Standing still made it permanent, since the body angle
+     * only eases towards the look angle while walking.
+     */
+    public static Float bodyYawFor(Entity entity) {
+        if (!(entity instanceof EntityPlayer)) {
+            return null;
+        }
+        if (entity == Minecraft.getMinecraft().thePlayer) {
+            return inWorld() ? selfBodyYaw() : null;
+        }
+        VRPose pose = VRPlayers.get(entity.getEntityId(),
+                lol.gzmc.vivecraftx.ClientEvents.partialTicks());
+        if (pose == null) {
+            return null;
+        }
+        Vec3 look = forwardOf(pose.rotations[0]);
+        Vec3 main = pose.positions[1];
+        Vec3 off = pose.positions[2];
+        if (look == null || main == null || off == null) {
+            return null;
+        }
+        return Float.valueOf(chestYaw(look, main, off, pose.reversed, pose.seated));
+    }
+
+    /**
+     * The chest angle from a head direction and two hand positions.
+     *
+     * <p>In one place, because two places that work it out separately are two places that can
+     * drift apart, and the whole point of the number is that the poser and the renderer agree
+     * on it.
+     */
+    private static float chestYaw(Vec3 look, Vec3 main, Vec3 off, boolean reversed,
+            boolean seated) {
+        // Seated, the hands say nothing about which way the chest faces, so the head has to.
+        if (seated) {
+            return yawOf(look);
+        }
         return bodyYaw(reversed ? main : off, reversed ? off : main, look);
     }
 
@@ -386,8 +432,7 @@ public final class VRModelPose {
         Vec3 left = reversed ? main : off;
         Vec3 rightSide = reversed ? offSide : mainSide;
         Vec3 leftSide = reversed ? mainSide : offSide;
-        // Seated, the hands say nothing about which way the chest faces, so the head has to.
-        float bodyYaw = seated ? yawOf(look) : bodyYaw(left, right, look);
+        float bodyYaw = chestYaw(look, main, off, reversed, seated);
 
         // The head turns relative to the body, so what matters is the difference between where
         // the body faces and where the headset points -- not either on its own. The figure itself

@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Turns your own body the way your shoulders are turned, and keeps its hands empty.
+ * Turns a player's body the way their shoulders are turned, and keeps your own hands empty.
  *
  * <p>The renderer turns the whole model by the player's yaw before the model poses itself. In a
  * headset that field holds where the controller is pointing, which has nothing to do with which
@@ -21,8 +21,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * faced another, and the arms would orbit it. Both are given the same number here instead, and
  * put back afterwards so nothing else sees the change.
  *
- * <p>The hands are emptied because what they hold is already drawn at the controller, which is
- * where it really is. Drawn twice, the second copy is always the wrong one.
+ * <p>For everyone in a headset, not only for oneself. This began as a fix for one's own body and
+ * the reason it gives applies just as much to the people you can see: theirs is in fact worse,
+ * because the body angle only eases towards the look angle while they are walking, so somebody
+ * standing still and turning on the spot stays wrong indefinitely rather than catching up.
+ *
+ * <p>Your own hands are emptied because what they hold is already drawn at the controller, which
+ * is where it really is. Drawn twice, the second copy is always the wrong one. Nobody else's are:
+ * what they hold is drawn in the hand of the arm this has just placed, which is where it belongs.
  */
 @Mixin(RenderPlayer.class)
 public class MixinRenderPlayerSelf {
@@ -42,10 +48,7 @@ public class MixinRenderPlayerSelf {
     private void vivecraftx$faceTheRightWay(AbstractClientPlayer entity, double x, double y, double z,
             float yaw, float partialTicks, CallbackInfo ci) {
         this.vivecraftx$turned = false;
-        if (entity != Minecraft.getMinecraft().thePlayer || !VRModelPose.inWorld()) {
-            return;
-        }
-        Float body = VRModelPose.selfBodyYaw();
+        Float body = VRModelPose.bodyYawFor(entity);
         if (body == null) {
             return;
         }

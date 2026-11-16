@@ -11,7 +11,6 @@ import io.netty.buffer.ByteBuf;
 
 import lol.gzmc.vivecraftx.ViveCraftX;
 
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 
 /**
@@ -37,6 +36,14 @@ public final class VRNetwork {
 
     /** Past this, the sender is out of sight and their hands are nobody's business. */
     private static final double RANGE = 64.0D;
+
+    /** The same bound, for the relay that now does the sending. */
+    static final double POSE_RANGE = RANGE;
+
+    /** Sends one message to one player. Only the server thread may call this. */
+    static void sendToOne(IMessage message, EntityPlayerMP player) {
+        CHANNEL.sendTo(message, player);
+    }
 
     public static void init() {
         CHANNEL.registerMessage(FromPlayer.Handler.class, FromPlayer.class, 0, Side.SERVER);
@@ -71,9 +78,11 @@ public final class VRNetwork {
             this.pose = pose;
         }
 
+        private boolean whole;
+
         @Override
         public void fromBytes(ByteBuf buf) {
-            this.pose.read(buf);
+            this.whole = this.pose.read(buf);
         }
 
         @Override
@@ -84,24 +93,17 @@ public final class VRNetwork {
         public static class Handler implements IMessageHandler<FromPlayer, IMessage> {
             @Override
             public IMessage onMessage(FromPlayer message, MessageContext ctx) {
+                if (!message.whole) {
+                    return null;
+                }
                 EntityPlayerMP sender = ctx.getServerHandler().playerEntity;
                 if (sender == null || sender.worldObj == null) {
                     return null;
                 }
-                // Straight back out to everyone nearby. Nothing is kept on the server: a pose is
-                // only worth anything for the frame it describes, and a player who stops sending
-                // should stop being posed rather than freeze in their last position.
-                ToWatchers out = new ToWatchers(sender.getEntityId(), message.pose);
-                for (Object o : sender.worldObj.playerEntities) {
-                    EntityPlayer other = (EntityPlayer) o;
-                    if (other == sender || !(other instanceof EntityPlayerMP)) {
-                        continue;
-                    }
-                    if (other.getDistanceSqToEntity(sender) > RANGE * RANGE) {
-                        continue;
-                    }
-                    CHANNEL.sendTo(out, (EntityPlayerMP) other);
-                }
+                // Handed to the server thread rather than fanned out from here. See VRPoseRelay
+                // for why: this runs on a network thread, and both the world's player list and
+                // the channel's one-recipient-at-a-time send belong to the server's.
+                VRPoseRelay.queue(sender, message.pose);
                 return null;
             }
         }
@@ -226,10 +228,15 @@ public final class VRNetwork {
             this.pose = pose;
         }
 
+        private boolean whole;
+
         @Override
         public void fromBytes(ByteBuf buf) {
+            if (buf.readableBytes() < 4 + VRPose.BYTES) {
+                return;
+            }
             this.entityId = buf.readInt();
-            this.pose.read(buf);
+            this.whole = this.pose.read(buf);
         }
 
         @Override
@@ -241,6 +248,9 @@ public final class VRNetwork {
         public static class Handler implements IMessageHandler<ToWatchers, IMessage> {
             @Override
             public IMessage onMessage(ToWatchers message, MessageContext ctx) {
+                if (!message.whole) {
+                    return null;
+                }
                 try {
                     VRPlayers.put(message.entityId, message.pose);
                 } catch (Throwable t) {

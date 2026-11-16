@@ -62,7 +62,16 @@ public final class VRPose {
         }
     }
 
-    public void read(ByteBuf buf) {
+    /**
+     * @return false when the payload is not a whole pose, in which case nothing has been changed
+     */
+    public boolean read(ByteBuf buf) {
+        // Checked before anything is read, because reading past the end throws, and this runs on
+        // the network thread where a throw costs the whole tick's relay for everybody rather than
+        // just the malformed packet.
+        if (buf.readableBytes() < BYTES) {
+            return false;
+        }
         this.inVr = buf.readBoolean();
         this.reversed = buf.readBoolean();
         this.seated = buf.readBoolean();
@@ -74,6 +83,7 @@ public final class VRPose {
                 this.rotations[i][j] = buf.readFloat();
             }
         }
+        return true;
     }
 
     /** Bytes on the wire, for sizing a buffer. */
