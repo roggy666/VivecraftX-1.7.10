@@ -1832,10 +1832,18 @@ initialized = true;
 			VR.settings().vrWorldRotation = 0;
 			VR.player().worldRotationRadians = (float) Math.toRadians( VR.settings().vrWorldRotation);
 			float[] playArea = getPlayAreaSize();
+			// In the play area's own space, like every other pose stored in this field, and
+			// unlike what stood here: the room origin was added on, which is a position in the
+			// world. Starting the game and going no further, that origin is still (0,0,0) and
+			// adding it changes nothing, which is why this looked right for as long as nobody
+			// came back out of a world. Quitting to the title screen from inside one, it is
+			// wherever the player was standing, and the menu was placed that many blocks from
+			// the camera -- past the far clip, leaving the headset showing the menu room's
+			// background colour and nothing in it.
 			guiPos_Room = new Vector3f(
-					(float) (0 + VR.player().getRoomOriginPos_World().xCoord),
-					(float) (1.3f + VR.player().getRoomOriginPos_World().yCoord),
-					(float) ((playArea != null ? -playArea[1] / 2 : -1.5f) - 0.3f + VR.player().getRoomOriginPos_World().zCoord));
+					0F,
+					1.3F,
+					(playArea != null ? -playArea[1] / 2 : -1.5F) - 0.3F);
 
 
 			guiRotationPose = new Matrix4f();

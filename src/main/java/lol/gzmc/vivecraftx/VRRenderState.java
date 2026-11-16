@@ -144,13 +144,4 @@ public final class VRRenderState {
         return out.addVector(interPolatedRoomOrigin.xCoord, interPolatedRoomOrigin.yCoord,
                 interPolatedRoomOrigin.zCoord);
     }
-
-    /** Clears per-frame state, so a world reload cannot be seen through stale values. */
-    public static void reset() {
-        interpolatedPlayerPos = Vec3.createVectorHelper(0, 0, 0);
-        interPolatedRoomOrigin = Vec3.createVectorHelper(0, 0, 0);
-        irpUpdatedThisFrame = false;
-        reinitFramebuffers = true;
-        frameDelta = 0f;
-    }
 }

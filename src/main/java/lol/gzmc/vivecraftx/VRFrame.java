@@ -80,6 +80,7 @@ public final class VRFrame {
         Minecraft mc = Minecraft.getMinecraft();
         EntityLivingBase view = mc.renderViewEntity != null ? mc.renderViewEntity : mc.thePlayer;
         if (view == null) {
+            withoutAWorld();
             return;
         }
         OpenVRPlayer player = VR.player();
@@ -141,6 +142,38 @@ public final class VRFrame {
         VRListener.update();
 
         scheduleTerrainUpdateIfViewMoved();
+    }
+
+    /**
+     * The part of the frame that still has to be prepared when there is no world to stand in.
+     *
+     * <p>Everything past the return above needs a player to measure from, but not everything
+     * above it belongs to the world, and the menu is drawn from what is left. The play area's
+     * origin is the one that matters: it is a position in the world, and while the title screen
+     * is up there is no world for it to be a position in. Left holding whatever the last world
+     * put there, the menu room is built around a point hundreds of blocks from the camera and
+     * falls outside the far clip altogether -- which is why quitting to the title screen from
+     * inside a world filled the headset with the room's background colour and nothing else,
+     * while reaching the same screen by starting the game and never loading a world looked
+     * exactly as it should.
+     *
+     * <p>The other two settle to a resting value on their own once the player is gone, and both
+     * are read while the menu is on screen. Without this the comfort aperture stays shut at
+     * whatever the last frame of movement left it at, and the camera keeps the far clip it worked
+     * out for the world that is no longer loaded.
+     */
+    private static void withoutAWorld() {
+        Vec3 origin = VRRenderState.interPolatedRoomOrigin;
+        origin.xCoord = 0D;
+        origin.yCoord = 0D;
+        origin.zCoord = 0D;
+        Vec3 pos = VRRenderState.interpolatedPlayerPos;
+        pos.xCoord = 0D;
+        pos.yCoord = 0D;
+        pos.zCoord = 0D;
+        VRRenderState.irpUpdatedThisFrame = false;
+        lol.gzmc.vivecraftx.render.VRComfortVignette.update();
+        lol.gzmc.vivecraftx.render.VRCamera.beginFrame();
     }
 
     private static double lerp(double from, double to, float t) {
