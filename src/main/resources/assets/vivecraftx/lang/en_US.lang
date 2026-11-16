@@ -33,6 +33,7 @@ vivecraft.key.radialmenu=Radial Menu
 vivecraft.key.trackpadTouch=Trackpad Touched (internal)
 
 vivecraft.key.climbeyGrab=Grab to Climb
+vivecraft.key.keyboardMove=Move VR Keyboard
 vivecraft.key.climbeyJump=Climbing Jump
 
 vivecraft.key.guiLeftClick=Click

@@ -270,6 +270,11 @@ public final class VRKeyboard {
         held[0] = null;
         held[1] = null;
         keys = null;
+        // Without a buzz: nobody is holding it any more either way, and a board that vanishes
+        // while a grip is down should not report itself as having been put down by hand.
+        carriedBy = -1;
+        carriedFrom = null;
+        carriedCentre = null;
         if (show) {
             place();
         }
@@ -287,13 +292,43 @@ public final class VRKeyboard {
             showing = false;
             return;
         }
-        double fx = look.xCoord / flat;
-        double fz = look.zCoord / flat;
-
         // Within reach and below the line of sight, where a keyboard belongs: you look down at
         // one, you do not hold it up in front of your face.
-        centre = Vec3.createVectorHelper(eye.xCoord + fx * 0.45D, eye.yCoord - 0.35D,
-                eye.zCoord + fz * 0.45D);
+        centre = Vec3.createVectorHelper(eye.xCoord + look.xCoord / flat * 0.45D,
+                eye.yCoord - 0.35D,
+                eye.zCoord + look.zCoord / flat * 0.45D);
+        if (!face()) {
+            showing = false;
+        }
+    }
+
+    /**
+     * Turns the board to face whoever is looking at it, from wherever it now stands.
+     *
+     * <p>Taken out of {@link #place} so that a board being carried can be turned without being
+     * put somewhere, and derived from the line between the head and the board rather than from
+     * the direction the head is pointing. At the moment the board is first placed those two are
+     * the same line, so nothing about the initial pose changed; they part company as soon as the
+     * board is carried off to one side, and it is the line to the board that keeps the face
+     * pointing at the reader.
+     *
+     * @return false when the board is directly above or below the head, where there is no
+     *         horizontal direction to turn it by and the previous pose is the better answer
+     */
+    private static boolean face() {
+        Vec3 eye = VR.roomScale().getHMDPos_World();
+        if (eye == null || centre == null) {
+            return false;
+        }
+        double dx = centre.xCoord - eye.xCoord;
+        double dz = centre.zCoord - eye.zCoord;
+        double flat = Math.sqrt(dx * dx + dz * dz);
+        if (flat < 1.0E-4D) {
+            return right != null && up != null;
+        }
+        double fx = dx / flat;
+        double fz = dz / flat;
+
         // The player's own right, which is the flat look direction crossed with world up. It
         // had been the opposite of that, and the two sign errors that follow from it are the
         // whole bug: a board whose face points away from the reader and whose writing runs the
@@ -304,6 +339,7 @@ public final class VRKeyboard {
         // back toward whoever is typing on it.
         double tilt = Math.toRadians(45);
         up = Vec3.createVectorHelper(fx * Math.sin(tilt), Math.cos(tilt), fz * Math.sin(tilt));
+        return true;
     }
 
     /**
@@ -321,6 +357,18 @@ public final class VRKeyboard {
         }
         layout();
         long now = Minecraft.getSystemTime();
+        if (carry()) {
+            // Nothing is typed while the board is moving. The keys are sliding along under both
+            // hands, and a key leaving from under a resting finger would read as a release and
+            // the next one arriving as a fresh press -- a line of rubbish for every drag. The
+            // clocks are kept running so that letting go does not type either: the first key the
+            // hand is left sitting in still has to wait out the debounce.
+            held[0] = null;
+            held[1] = null;
+            settledAt[0] = now;
+            settledAt[1] = now;
+            return;
+        }
         for (int hand = 0; hand < 2; hand++) {
             Vec3 tip = tip(hand);
             if (tip == null) {
@@ -341,6 +389,136 @@ public final class VRKeyboard {
                 press(mc, key);
             }
         }
+    }
+
+    // --- carrying the board about ----------------------------------------------------------
+
+    /**
+     * How far outside the plate, and how far in front of or behind it, a hand may be and still
+     * take hold.
+     *
+     * <p>There has to be a limit, and not only so that a squeeze in mid-air does nothing. While
+     * a screen is open the menu set is active as well as the keyboard's, and on most of the
+     * shipped profiles that set has the grips too -- shift-click and middle-click, which are the
+     * only way to move a stack. So the rule is physical: a grip squeezed at the board takes the
+     * board, and a grip squeezed anywhere else is still the menu's. The board stands below the
+     * line of sight and the panel above it, so a hand pointing at the menu is nowhere near this.
+     */
+    private static final double REACH = 0.10D;
+    private static final double REACH_DEPTH = 0.12D;
+
+    /** Which hand is carrying the board, or -1 when nobody is. */
+    private static int carriedBy = -1;
+
+    /** Where that hand was, and where the board's centre was, at the moment it took hold. */
+    private static Vec3 carriedFrom;
+    private static Vec3 carriedCentre;
+
+    /**
+     * Moves the board with whichever hand has hold of it.
+     *
+     * <p>The board follows the hand by the distance the hand has travelled since it took hold,
+     * rather than by being pinned to it: picking it up does not jerk it to the fingertip, and
+     * letting go leaves it exactly where it was let go of. It is turned to face the player as it
+     * goes, so a board carried off to one side is still readable, and its tilt is left alone --
+     * a keyboard is a thing lying on a desk, and a wrist that rolls while dragging should not be
+     * able to stand it on its edge or turn it upside down.
+     *
+     * @return true while the board is being carried, which is also when nothing may be typed
+     */
+    private static boolean carry() {
+        if (carriedBy >= 0) {
+            Vec3 now = tip(carriedBy);
+            if (!holding(carriedBy) || now == null || carriedFrom == null
+                    || carriedCentre == null) {
+                letGo();
+                return false;
+            }
+            centre = Vec3.createVectorHelper(
+                    carriedCentre.xCoord + now.xCoord - carriedFrom.xCoord,
+                    carriedCentre.yCoord + now.yCoord - carriedFrom.yCoord,
+                    carriedCentre.zCoord + now.zCoord - carriedFrom.zCoord);
+            face();
+            return true;
+        }
+        for (int hand = 0; hand < 2; hand++) {
+            Vec3 tip = tip(hand);
+            if (!holding(hand) || tip == null || !withinReach(tip)) {
+                continue;
+            }
+            carriedBy = hand;
+            carriedFrom = tip;
+            carriedCentre = centre;
+            buzz(hand);
+            return true;
+        }
+        return false;
+    }
+
+    private static void letGo() {
+        if (carriedBy >= 0) {
+            buzz(carriedBy);
+        }
+        carriedBy = -1;
+        carriedFrom = null;
+        carriedCentre = null;
+    }
+
+    private static boolean holding(int hand) {
+        return MCOpenVR.isControllerTracking(hand)
+                && MCOpenVR.keyKeyboardMove.isKeyDown(controllerOf(hand));
+    }
+
+    private static ControllerType controllerOf(int hand) {
+        return hand == 0 ? ControllerType.RIGHT : ControllerType.LEFT;
+    }
+
+    private static void buzz(int hand) {
+        MCOpenVR.triggerHapticPulse(controllerOf(hand), 0.03F, 160F, 0.7F);
+    }
+
+    /** Whether this point is close enough to the face of the board to take hold of it. */
+    private static boolean withinReach(Vec3 point) {
+        float[] plate = plate();
+        if (plate == null) {
+            return false;
+        }
+        double dx = point.xCoord - centre.xCoord;
+        double dy = point.yCoord - centre.yCoord;
+        double dz = point.zCoord - centre.zCoord;
+        Vec3 normal = cross(right, up);
+        double depth = dx * normal.xCoord + dy * normal.yCoord + dz * normal.zCoord;
+        double u = dx * right.xCoord + dy * right.yCoord + dz * right.zCoord;
+        double v = dx * up.xCoord + dy * up.yCoord + dz * up.zCoord;
+        return depth <= DEPTH + REACH_DEPTH && depth >= -REACH_DEPTH
+                && u >= plate[0] - REACH && u <= plate[1] + REACH
+                && v >= plate[2] - REACH && v <= plate[3] + REACH;
+    }
+
+    /**
+     * Where the plate's four edges sit on the face of the board.
+     *
+     * <p>Taken from the keys themselves rather than written out, and read by the one thing that
+     * draws the plate and the one thing that decides whether a hand is on it -- so the plate a
+     * player can see and the plate they can take hold of cannot come to disagree.
+     *
+     * @return {@code {minU, maxU, minV, maxV}}, or null before the keys have been laid out
+     */
+    private static float[] plate() {
+        if (keys == null || keys.length == 0) {
+            return null;
+        }
+        float minU = Float.MAX_VALUE;
+        float maxU = -Float.MAX_VALUE;
+        float minV = Float.MAX_VALUE;
+        float maxV = -Float.MAX_VALUE;
+        for (Key key : keys) {
+            minU = Math.min(minU, key.left - GAP);
+            maxU = Math.max(maxU, key.left + key.width + GAP);
+            minV = Math.min(minV, key.top - KEY - GAP);
+            maxV = Math.max(maxV, key.top + GAP);
+        }
+        return new float[] {minU, maxU, minV, maxV};
     }
 
     /**
@@ -572,18 +750,23 @@ public final class VRKeyboard {
 
     // --- drawing ----------------------------------------------------------------------------
 
-    public static void render(float partialTicks) {
-        inEyeCamera(false);
-    }
-
     /**
-     * The pointing fingers, which take the place of the arms while the board is up.
+     * The board and the fingers reaching into it.
      *
-     * <p>Called from the hands pass rather than from here, so that the two are alternatives and
-     * not an arm with a finger sticking out of it.
+     * <p>Drawn after the interface panel rather than with the hands, which is where both of
+     * these used to be. The panel is drawn with depth testing off whenever hud occlusion is off
+     * -- the default, so that a block standing between the player and a menu cannot put the menu
+     * out of reach -- and it writes depth while it does it. Anything drawn before it is therefore
+     * painted over however near it is, and the board is nearer than the panel by design: it sits
+     * within arm's reach and the panel stands behind it. So the board goes on last, where being
+     * in front of the panel is the whole point.
+     *
+     * <p>The fingers first and the board second, because the board's plate is translucent and
+     * has to be blended over what is behind it.
      */
-    public static void renderFingers(float partialTicks) {
+    public static void renderOverPanel() {
         inEyeCamera(true);
+        inEyeCamera(false);
     }
 
     /**
@@ -646,6 +829,11 @@ public final class VRKeyboard {
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             GL11.glDisable(GL11.GL_LIGHTING);
             GL11.glDisable(GL11.GL_CULL_FACE);
+            // Stated rather than inherited. This runs after the interface panel now, and the
+            // panel leaves depth testing in whichever state the occlusion setting called for --
+            // so the board would be at the mercy of a setting that has nothing to do with it.
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthMask(true);
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
@@ -676,16 +864,14 @@ public final class VRKeyboard {
      * board is when every key on it happens to be dark.
      */
     private static void backplate(Tessellator tes) {
-        float minU = Float.MAX_VALUE;
-        float maxU = -Float.MAX_VALUE;
-        float minV = Float.MAX_VALUE;
-        float maxV = -Float.MAX_VALUE;
-        for (Key key : keys) {
-            minU = Math.min(minU, key.left - GAP);
-            maxU = Math.max(maxU, key.left + key.width + GAP);
-            minV = Math.min(minV, key.top - KEY - GAP);
-            maxV = Math.max(maxV, key.top + GAP);
+        float[] plate = plate();
+        if (plate == null) {
+            return;
         }
+        float minU = plate[0];
+        float maxU = plate[1];
+        float minV = plate[2];
+        float maxV = plate[3];
         tes.setColorRGBA_F(0.04F, 0.04F, 0.05F, 0.80F);
         tes.addVertex(minU, maxV, 0);
         tes.addVertex(maxU, maxV, 0);
@@ -786,6 +972,9 @@ public final class VRKeyboard {
             GL11.glDisable(GL11.GL_LIGHTING);
             GL11.glDisable(GL11.GL_CULL_FACE);
             GL11.glDisable(GL11.GL_BLEND);
+            // As in the board below: no longer inherited from the world pass, so it is said here.
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthMask(true);
 
             Tessellator tes = Tessellator.instance;
             tes.startDrawingQuads();

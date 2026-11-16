@@ -300,7 +300,7 @@
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/keyboard/in/vivecraft.key.keyboardshift"
+                     "output" : "/actions/keyboard/in/vivecraft.key.keyboardmove"
                   }
                },
                "mode" : "button",
@@ -309,7 +309,7 @@
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/keyboard/in/vivecraft.key.keyboardshift"
+                     "output" : "/actions/keyboard/in/vivecraft.key.keyboardmove"
                   }
                },
                "mode" : "button",

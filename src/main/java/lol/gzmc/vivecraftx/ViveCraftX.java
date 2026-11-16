@@ -42,7 +42,7 @@ import org.apache.logging.log4j.Logger;
 public class ViveCraftX {
 
     public static final String MODID = "vivecraftx";
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
 
     public static final Logger LOG = LogManager.getLogger("ViveCraftX");
 

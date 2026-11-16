@@ -206,24 +206,28 @@ public final class VRGui {
      * @param sceneBuffer the eye's scene buffer, which has to be bound again first
      */
     public static void compositeInto(VRFramebuffer sceneBuffer) {
-        if (!capturing) {
-            return;
-        }
-        capturing = false;
-
         Minecraft mc = Minecraft.getMinecraft();
-        ((IMinecraftExt) mc).vivecraftx$setFramebufferMc(borrowedFrom);
-        borrowedFrom = null;
+        boolean hasPanel = capturing;
+        if (capturing) {
+            capturing = false;
+            ((IMinecraftExt) mc).vivecraftx$setFramebufferMc(borrowedFrom);
+            borrowedFrom = null;
+        }
 
         sceneBuffer.bindFramebuffer(true);
         if (VR.settings() == null || VR.player() == null || VR.roomScale() == null) {
             return;
         }
-        try {
-            renderGuiLayer(mc);
-        } catch (Throwable t) {
-            ViveCraftX.LOG.error("Drawing the VR interface panel failed", t);
+        if (hasPanel) {
+            try {
+                renderGuiLayer(mc);
+            } catch (Throwable t) {
+                ViveCraftX.LOG.error("Drawing the VR interface panel failed", t);
+            }
         }
+        // The keyboard on top of the panel, and outside the branch above because the board can
+        // be up while the interface itself draws nothing worth capturing.
+        VRKeyboard.renderOverPanel();
     }
 
     /**

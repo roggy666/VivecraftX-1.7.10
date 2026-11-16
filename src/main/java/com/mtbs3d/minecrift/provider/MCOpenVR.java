@@ -467,6 +467,20 @@ public class MCOpenVR
 	public static final HandedKeyBinding keyClimbeyJump =
 			new HandedKeyBinding("vivecraft.key.climbeyJump", Keyboard.KEY_NONE, CATEGORY_CLIMBEY);
 
+	/**
+	 * Taking hold of the VR keyboard to move it, per hand.
+	 *
+	 * <p>In the keyboard's own action set, which SteamVR activates only while the board is up.
+	 * That is what lets this sit on the grips without taking them away from anything: outside the
+	 * keyboard they still mean whatever the player has them bound to, and the binding profiles
+	 * already pointed both grips at this set in the expectation of something being there.
+	 *
+	 * <p>Per hand because either hand should be able to take the board, and because the hand that
+	 * took it is the hand the board has to follow.
+	 */
+	public static final HandedKeyBinding keyKeyboardMove =
+			new HandedKeyBinding("vivecraft.key.keyboardMove", Keyboard.KEY_NONE, CATEGORY_KEYBOARD);
+
 	// Clicking about in menus. Their own set, so the same trigger that attacks in the world
 	// clicks in a menu without the player binding it twice.
 	public static final KeyBinding keyGuiLeftClick =
@@ -729,7 +743,8 @@ initialized = true;
 					keyFreeMoveRotate, keyFreeMoveStrafe, keyToggleMovement, keyQuickTorch,
 					keyMenuButton, keyToggleKeyboard, keyRadialMenu, keyTrackpadTouch,
 					keyVRInteract, keyClimbeyGrab,
-					keyClimbeyJump, keyGuiLeftClick, keyGuiRightClick, keyGuiMiddleClick,
+					keyClimbeyJump, keyKeyboardMove,
+					keyGuiLeftClick, keyGuiRightClick, keyGuiMiddleClick,
 					keyGuiShift, keyGuiCtrl, keyGuiAlt, keyGuiScrollUp, keyGuiScrollDown,
 					keyGuiScrollAxis));
 		}
@@ -2914,6 +2929,7 @@ initialized = true;
 				com.mtbs3d.minecrift.control.VRInputActionSet.CONTEXTUAL);
 		addActionParams(map, keyClimbeyGrab, "suggested", "boolean", null);
 		addActionParams(map, keyClimbeyJump, "suggested", "boolean", null);
+		addActionParams(map, keyKeyboardMove, "suggested", "boolean", null);
 		addActionParams(map, keyGuiLeftClick, "suggested", "boolean", null);
 		addActionParams(map, keyGuiRightClick, "suggested", "boolean", null);
 		addActionParams(map, keyGuiMiddleClick, "optional", "boolean", null);
@@ -3319,7 +3335,10 @@ initialized = true;
 		} else {
 			list.add(VRInputActionSet.GUI);
 		}
-		if (keyboardShowing) {
+		// Either kind of keyboard. This read the overlay's flag alone, which meant the set was
+		// never active for the board standing in the world -- and the board is the default, so
+		// the actions that only make sense while a keyboard is up could never be reported at all.
+		if (keyboardShowing || lol.gzmc.vivecraftx.render.VRKeyboard.isShowing()) {
 			list.add(VRInputActionSet.KEYBOARD);
 		}
 

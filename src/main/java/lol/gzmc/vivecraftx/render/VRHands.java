@@ -139,9 +139,13 @@ public final class VRHands {
         // each hand becomes one thin bar ending exactly at that point -- upstream makes the
         // same swap, in the same place in the frame, and for the same reason. Either, never
         // both: a finger growing out of a fist would be worse than either on its own.
-        if (VRKeyboard.isShowing()) {
-            VRKeyboard.renderFingers(partialTicks);
-        } else {
+        //
+        // Only the arms are decided here. The board and the fingers over it are drawn later,
+        // after the interface panel, because the panel is drawn with depth testing off whenever
+        // hud occlusion is -- which it is by default, so that a block between the player and a
+        // menu cannot make the menu unreachable. Drawn before it, the board was painted over by
+        // a panel standing further away than itself.
+        if (!VRKeyboard.isShowing()) {
             render(partialTicks);
         }
         // The crosshair belongs here too, for the same reason the hands do: this is the last point
@@ -150,7 +154,6 @@ public final class VRHands {
         VRTeleportArc.render(partialTicks);
         VRBodyMarker.render();
         VRRadialMenu.render(partialTicks);
-        VRKeyboard.render(partialTicks);
         renderFirstPersonOverlays(partialTicks);
         VRComfortVignette.render();
     }

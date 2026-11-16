@@ -33,6 +33,7 @@ vivecraft.key.radialmenu=Круговое меню
 vivecraft.key.trackpadTouch=Касание сенсора (служебное)
 
 vivecraft.key.climbeyGrab=Схватиться, чтобы лезть
+vivecraft.key.keyboardMove=Передвинуть VR-клавиатуру
 vivecraft.key.climbeyJump=Прыжок при лазании
 
 vivecraft.key.guiLeftClick=Нажать
