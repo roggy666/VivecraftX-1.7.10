@@ -3861,7 +3861,17 @@ initialized = true;
 				setKeyboardOverlayShowing(!keyboardShowing, null);
 			}
 		}
-		lol.gzmc.vivecraftx.render.VRKeyboard.process();
+		try {
+			lol.gzmc.vivecraftx.render.VRKeyboard.process();
+		} catch (Throwable t) {
+			// The board is a gadget standing on top of the session, not a part of it. A fault in
+			// it used to travel up to the catch-all around the poll in VRFrame.onFrameStart,
+			// which reads every throwable as the headset runtime having stopped answering and
+			// ends VR outright -- so a key that could not be worked out dropped the player back
+			// to the monitor mid-sentence. Put the board away and carry on instead.
+			lol.gzmc.vivecraftx.ViveCraftX.LOG.error("The VR keyboard failed and has been put away", t);
+			lol.gzmc.vivecraftx.render.VRKeyboard.setShowing(false);
+		}
 	}
 
 	/**

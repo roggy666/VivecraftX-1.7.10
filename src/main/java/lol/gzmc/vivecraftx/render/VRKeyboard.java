@@ -369,6 +369,12 @@ public final class VRKeyboard {
             settledAt[1] = now;
             return;
         }
+        // The board the hands are being scanned against. A press is handed to whatever screen
+        // is open and that screen is free to close itself -- Enter on this very board is how the
+        // chat line is sent -- which runs the screen hook, which puts away a board that was
+        // opened for that screen and throws its keys away. The second hand must not go on
+        // scanning a board that the first hand's press has already taken down or replaced.
+        Key[] scanning = keys;
         for (int hand = 0; hand < 2; hand++) {
             Vec3 tip = tip(hand);
             if (tip == null) {
@@ -387,6 +393,9 @@ public final class VRKeyboard {
                         hand == 0 ? ControllerType.RIGHT : ControllerType.LEFT,
                         0.03F, 160F, 0.7F);
                 press(mc, key);
+                if (!showing || keys != scanning) {
+                    return;
+                }
             }
         }
     }
