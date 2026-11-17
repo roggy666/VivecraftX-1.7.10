@@ -26,6 +26,7 @@ public class GuiHUDSettings extends BaseGuiSettings
             VRSettings.VrOptions.HUD_YAW,
             VRSettings.VrOptions.HUD_OPACITY,
             VRSettings.VrOptions.RENDER_MENU_BACKGROUND,
+            VRSettings.VrOptions.CONTAINER_GUI_AT_FACE,
             VRSettings.VrOptions.TOUCH_HOTBAR,
             VRSettings.VrOptions.PHYSICAL_KEYBOARD,
             VRSettings.VrOptions.KEYBOARD_LAYOUT,
@@ -179,6 +180,8 @@ public class GuiHUDSettings extends BaseGuiSettings
                 return tooltipLines("vivecraftx.tooltip.hudOcclusion");
             case RENDER_MENU_BACKGROUND:
                 return tooltipLines("vivecraftx.tooltip.renderMenuBackground");
+            case CONTAINER_GUI_AT_FACE:
+                return tooltipLines("vivecraftx.tooltip.containerGuiAtFace");
             case HUD_LOCK_TO:
                 return tooltipLines("vivecraftx.tooltip.hudLockTo");
             case TOUCH_HOTBAR:

@@ -275,20 +275,37 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 	 * afterwards, so a fraction of a millimetre a step would accumulate into the player's real
 	 * floor drifting away from the one they can see.
 	 *
-	 * <p>Marked as a reset because the rotation being cancelled is not interpolated: the renderer
-	 * takes the new angle the moment it exists, so an origin that eased towards its new place over
-	 * the remaining frames of the tick would trace exactly the arc this method exists to prevent.
+	 * <p>Applied to both ends of the window the origin is interpolated over, and not only to
+	 * the near end. The rotation itself is not interpolated -- the renderer takes the new angle
+	 * the moment it exists, so an origin easing towards its new place over the remaining frames
+	 * of the tick would trace exactly the arc this method exists to prevent -- but the origin
+	 * carries a second thing besides the turn: once a tick it is translated by however far the
+	 * player walked, and that step is what the interpolation is there to smooth out. Marking the
+	 * whole origin as a jump, which is how this stood, threw the walk away with the turn, and
+	 * smooth turning does this every frame: the ground then advanced in twenty-hertz steps under
+	 * a ninety-hertz view, which is walking and turning at once reading as a shudder. Shifting
+	 * both ends by the same vector leaves the difference between them -- the walk -- untouched
+	 * while the turn takes effect whole and at once.
 	 */
-	private void rotateOriginAroundHead(float fromRotation, float toRotation, boolean onFrame) {
+	private void rotateOriginAroundHead(float fromRotation, float toRotation) {
 		Vec3 pivot = getHeadPivot_Room();
 		Vec3 before = roomToWorld(pivot, fromRotation);
 		Vec3 after = roomToWorld(pivot, toRotation);
+		double dx = before.xCoord - after.xCoord;
+		double dz = before.zCoord - after.zCoord;
 
-		setRoomOrigin(
-				roomOrigin.xCoord + before.xCoord - after.xCoord,
-				roomOrigin.yCoord,
-				roomOrigin.zCoord + before.zCoord - after.zCoord,
-				true, onFrame);
+		roomOrigin.xCoord += dx;
+		roomOrigin.zCoord += dz;
+		lastroomOrigin.xCoord += dx;
+		lastroomOrigin.zCoord += dz;
+
+		// Not through setRoomOrigin, which would have to be told both that this is a jump and
+		// that it is not; the two fields above are the whole of the move, and the bookkeeping it
+		// does besides them is done here instead. Nothing is said about irpUpdatedThisFrame, so
+		// that flag goes back to meaning what it says: an origin that really cannot be eased
+		// into, which is a re-anchor or a change of world scale and never a turn.
+		lastRoomUpdateTime = VR.stereo().getCurrentTimeSecs();
+		appliedWorldRotation = toRotation;
 
 		// The one thing this method promises, so it is worth hearing about if it ever stops being
 		// true. Upstream works the same quantity out and leaves it in a local for a debugger to
@@ -332,7 +349,7 @@ public class OpenVRPlayer implements IRoomscaleAdapter
 	    	// be put back under the entity outright, as it always was.
 	    	snapRoomOriginToPlayerEntity(mc.thePlayer, true, onFrame, nano);
 	    } else if (worldRotationRadians != from) {
-	    	rotateOriginAroundHead(from, worldRotationRadians, onFrame);
+	    	rotateOriginAroundHead(from, worldRotationRadians);
 	    }
 	    if(!onFrame)    lastWorldScale = worldScale;
 	}

@@ -411,6 +411,21 @@ public class VRSettings
     public boolean hudOcclusion = false;
 
     /**
+     * Whether a container's interface stands in front of the face, the way the inventory does,
+     * rather than over the block it belongs to.
+     *
+     * <p>Over the block is the better answer whenever the block is in front of you, and it is
+     * why Vivecraft does it: the panel is where the thing is, and reaching into a chest you are
+     * standing at reads as reaching into that chest. It stops being the better answer as soon as
+     * the block is somewhere else -- a furnace wedged in a corner, a chest on the far side of a
+     * fence, a hopper at your feet -- where the panel is left edge-on, underfoot or inside a
+     * wall, and has to be walked around before it can be read.
+     *
+     * <p>Off by default, so the behaviour everyone already has is the behaviour they keep.
+     */
+    public boolean containerGuiAtFace = false;
+
+    /**
      * Whether incoming chat fades away the way it does flat, or the latest lines stay put.
      *
      * <p>True, which is vanilla, by default: a line that stays is a line covering part of the
@@ -737,6 +752,11 @@ public class VRSettings
                     if (optionTokens[0].equals("hudOcclusion"))
                     {
                         this.hudOcclusion = optionTokens[1].equals("true");
+                    }
+
+                    if (optionTokens[0].equals("containerGuiAtFace"))
+                    {
+                        this.containerGuiAtFace = optionTokens[1].equals("true");
                     }
 
                     if (optionTokens[0].equals("menuAlwaysFollowFace"))
@@ -1332,6 +1352,8 @@ public class VRSettings
                     return var4 + tr("vivecraftx.value.showMode.never");
 	        case HUD_OCCLUSION:
 	        	return var4 + onOff(this.hudOcclusion);
+	        case CONTAINER_GUI_AT_FACE:
+	        	return var4 + onOff(this.containerGuiAtFace);
 	        case MENU_ALWAYS_FOLLOW_FACE:
 	        	return var4 + tr(this.menuAlwaysFollowFace ? "vivecraftx.value.menuFollow.always" : "vivecraftx.value.menuFollow.seated");
 	        case CROSSHAIR_OCCLUSION:
@@ -1661,6 +1683,9 @@ public class VRSettings
 	            
 	        case HUD_OCCLUSION:
 	            this.hudOcclusion = !this.hudOcclusion;
+	            break;
+	        case CONTAINER_GUI_AT_FACE:
+	            this.containerGuiAtFace = !this.containerGuiAtFace;
 	            break;
 	        case MENU_ALWAYS_FOLLOW_FACE:
 	            this.menuAlwaysFollowFace = !this.menuAlwaysFollowFace;
@@ -1998,6 +2023,7 @@ public class VRSettings
             var5.println("renderInGameCrosshairMode:" + this.renderInGameCrosshairMode);
             var5.println("renderBlockOutlineMode:" + this.renderBlockOutlineMode);
             var5.println("hudOcclusion:" + this.hudOcclusion);
+            var5.println("containerGuiAtFace:" + this.containerGuiAtFace);
             var5.println("analogMovement:" + this.analogMovement);
             var5.println("autoSprint:" + this.autoSprint);
             var5.println("autoSprintThreshold:" + this.autoSprintThreshold);
@@ -2188,6 +2214,7 @@ public class VRSettings
         RENDER_MENU_BACKGROUND("vivecraftx.option.renderMenuBackground", false, true),
         HUD_HIDE("vivecraftx.option.hudHide", false, true),
         HUD_OCCLUSION("vivecraftx.option.hudOcclusion", false, true),
+        CONTAINER_GUI_AT_FACE("vivecraftx.option.containerGuiAtFace", false, true),
         MENU_ALWAYS_FOLLOW_FACE("vivecraftx.option.menuAlwaysFollowFace", false, true),
         CROSSHAIR_OCCLUSION("vivecraftx.option.crosshairOcclusion", false, true),
         CHAT_FADE_AWAY("vivecraftx.option.chatFadeAway", false, true),

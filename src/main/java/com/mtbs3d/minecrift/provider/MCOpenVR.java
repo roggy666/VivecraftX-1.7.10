@@ -1902,7 +1902,11 @@ initialized = true;
 				|| newScreen instanceof GuiChat) {			
 
 			Quatf controllerOrientationQuat;
-			boolean appearOverBlock = (newScreen instanceof GuiCrafting)
+			// Over the block it belongs to, unless the player has asked for these to come to them
+			// instead. Reading false here sends the screen down the same path the inventory takes,
+			// which places it in front of the face at the inventory's own distance and scale.
+			boolean appearOverBlock = !VR.settings().containerGuiAtFace
+					&& ((newScreen instanceof GuiCrafting)
 					|| (newScreen instanceof GuiChest)
 					|| (newScreen instanceof GuiHopper)
 					|| (newScreen instanceof GuiFurnace)
@@ -1910,7 +1914,7 @@ initialized = true;
 					|| (newScreen instanceof GuiBeacon)
 					|| (newScreen instanceof GuiDispenser)
 					|| (newScreen instanceof GuiEnchantment)
-					|| (newScreen instanceof GuiRepair)
+					|| (newScreen instanceof GuiRepair))
 					;
 
 			// A miss has to be ruled out and not merely a null: the aim ray now reports one
