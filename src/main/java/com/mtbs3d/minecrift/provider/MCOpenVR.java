@@ -1310,23 +1310,24 @@ initialized = true;
 		guiWasRightClick = pressedrightclick;
 		guiWasMiddleClick = pressedmiddleclick;
 
-		if (controllerDeviceIndex[LEFT_CONTROLLER] != -1) {
-			//Shift
-			if (mc.currentScreen != null && pressedshift && !lastpressedShift)				
-			{
-				//press Shift
-				VRInputState.pressShiftFake = true;
-				if (Display.isActive()) KeyboardSimulator.robot.keyPress(KeyEvent.VK_SHIFT);
+		// Shift. The flag is the state and not the edges that used to set it: an edge-driven flag
+		// outlives the screen it belongs to, because once the screen is gone the release edge
+		// arrives with nothing open and was dropped, leaving Shift held for the rest of the
+		// session. The robot still wants the edges, a real key being something to press and
+		// release rather than to describe, and it is any use only while the window has focus --
+		// which, with a headset on, it generally does not. That is what the flag is for.
+		//
+		// No longer behind the left controller being tracked. The binding is not the left hand's:
+		// in the reversed profiles Shift sits on the right grip, and either way the player is free
+		// to bind it anywhere, so the gate made the whole thing depend on a controller that need
+		// have nothing to do with it.
+		VRInputState.pressShiftFake = pressedshift && mc.currentScreen != null;
+		if (mc.currentScreen != null && Display.isActive()) {
+			if (pressedshift && !lastpressedShift) {
+				KeyboardSimulator.robot.keyPress(KeyEvent.VK_SHIFT);
+			} else if (!pressedshift && lastpressedShift) {
+				KeyboardSimulator.robot.keyRelease(KeyEvent.VK_SHIFT);
 			}
-
-
-			if (mc.currentScreen != null && !pressedshift && lastpressedShift)			
-			{
-				//release Shift
-				VRInputState.pressShiftFake = false;
-				if (Display.isActive()) KeyboardSimulator.robot.keyRelease(KeyEvent.VK_SHIFT);
-			}	
-			//end Shift
 		}
 
 		if (controllerMouseX >= 0 && controllerMouseX < mc.displayWidth
@@ -1832,6 +1833,9 @@ initialized = true;
 		KeyboardSimulator.robot.mouseRelease(InputEvent.BUTTON2_DOWN_MASK);
 		KeyboardSimulator.robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK);
 		KeyboardSimulator.robot.keyRelease(KeyEvent.VK_SHIFT);
+		// And the half of it the window's focus does not reach, or Shift stays held into the next
+		// screen, where every click would move a whole stack.
+		VRInputState.pressShiftFake = false;
 
 		if(newScreen == null 	|| (mc.thePlayer!=null && !mc.thePlayer.isEntityAlive())){
 			guiPos_Room = null;
@@ -3321,6 +3325,53 @@ initialized = true;
 	 * in-game set is not, so the same trigger clicks instead of swinging. The global set is always
 	 * active, which is how the button that opens the menu can also close it.
 	 */
+	/**
+	 * Opens SteamVR's own binding editor on this mod's actions.
+	 *
+	 * <p>This is where the bindings are. The mod ships a default set per controller and the
+	 * runtime owns them from then on, per controller and across updates, so a screen of our own
+	 * could only ever describe them -- which is what the one this replaces did. It edited a table
+	 * left over from before SteamVR had an input system, and nothing has read that table since:
+	 * somebody rebinding a button there watched it change and nothing happen.
+	 *
+	 * <p>Every set is offered rather than the one in force, because the player came here to change
+	 * a binding and the set they want is as likely to be the one for menus as the one for play.
+	 * The actions carry their localized names into the generated manifest already, so the editor
+	 * lists them by what they do rather than by their paths.
+	 */
+	public static boolean showBindingsUI() {
+		if (vrInput == null) {
+			return false;
+		}
+		try {
+			VRInputActionSet[] all = VRInputActionSet.values();
+			VRActiveActionSet_t.ByReference ref = new VRActiveActionSet_t.ByReference();
+			ref.setAutoRead(false);
+			ref.setAutoWrite(false);
+			ref.setAutoSynch(false);
+			VRActiveActionSet_t[] sets = (VRActiveActionSet_t[]) ref.toArray(all.length);
+			for (int i = 0; i < all.length; i++) {
+				sets[i].ulActionSet = getActionSetHandle(all[i]);
+				sets[i].ulRestrictedToDevice = JOpenVRLibrary.k_ulInvalidInputValueHandle;
+				sets[i].nPriority = 0;
+				sets[i].setAutoRead(false);
+				sets[i].setAutoWrite(false);
+				sets[i].setAutoSynch(false);
+				sets[i].write();
+			}
+			ref.write();
+			int error = vrInput.ShowBindingsForActionSet.apply(ref, sets[0].size(), sets.length, 0L);
+			if (error != 0) {
+				ViveCraftX.LOG.error("SteamVR would not open the binding editor: error {}", error);
+				return false;
+			}
+			return true;
+		} catch (Throwable t) {
+			ViveCraftX.LOG.error("Opening the SteamVR binding editor failed", t);
+			return false;
+		}
+	}
+
 	private static VRActiveActionSet_t[] getActiveActionSets() {
 		List<VRInputActionSet> list = new ArrayList<VRInputActionSet>();
 		list.add(VRInputActionSet.GLOBAL);

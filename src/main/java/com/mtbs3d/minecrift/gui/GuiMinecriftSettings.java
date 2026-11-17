@@ -257,7 +257,14 @@ public class GuiMinecriftSettings extends BaseGuiSettings implements GuiEventEx
             else if (par1GuiButton.id == 220)
             {
                 this.guivrSettings.saveOptions();
-                this.mc.displayGuiScreen(new GuiVRControls(this, this.guivrSettings));
+                // Straight to SteamVR's binding editor, which is where these bindings live. The
+                // screen this used to open edited a table left over from before SteamVR had an
+                // input system, and nothing has read that table in a long time -- so rebinding
+                // anything there changed the screen and nothing else.
+                if (!com.mtbs3d.minecrift.provider.MCOpenVR.showBindingsUI()) {
+                    lol.gzmc.vivecraftx.util.ChatUtil.print(
+                            I18n.format("vivecraftx.message.bindingsUnavailable"));
+                }
             }
             else if (par1GuiButton.id == 222)
             {

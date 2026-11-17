@@ -2,6 +2,7 @@ package lol.gzmc.vivecraftx.mixins;
 
 import lol.gzmc.vivecraftx.VR;
 import lol.gzmc.vivecraftx.VRState;
+import lol.gzmc.vivecraftx.VRInputState;
 import lol.gzmc.vivecraftx.api.IGuiScreenExt;
 
 import net.minecraft.client.Minecraft;
@@ -14,6 +15,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Public entry points into GuiScreen's protected input handling, for synthesised controller input.
@@ -140,6 +142,23 @@ public abstract class MixinGuiScreen implements IGuiScreenExt {
         }
         if (this.mc != null && this.mc.theWorld != null) {
             ci.cancel();
+        }
+    }
+
+    /**
+     * The controller's Shift binding counts as Shift wherever the game asks the question.
+     *
+     * <p>The two reads that decide whether a click moves a whole stack are not here -- they go
+     * straight to LWJGL and are answered in MixinGuiContainer -- but every other screen asks
+     * through this method, and so does any mod. A binding that moved stacks and did nothing else
+     * Shift does would be a worse answer than none.
+     *
+     * <p>Only ever forced true. A real Shift held on a real keyboard is still a Shift.
+     */
+    @Inject(method = "isShiftKeyDown", at = @At("HEAD"), cancellable = true)
+    private static void vivecraftx$shiftFromController(CallbackInfoReturnable<Boolean> cir) {
+        if (VRInputState.pressShiftFake) {
+            cir.setReturnValue(true);
         }
     }
 }
